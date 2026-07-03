@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
+import { supabase } from "@/lib/supabase/client";
 
 /* ─── Types ───────────────────────────────────────────────── */
 
@@ -26,21 +27,21 @@ interface FreightOrder {
 
 type FiltroStatus = "todos" | "ativo" | "em_andamento" | "entregue" | "cancelado";
 
-/* ─── Helpers ────────────────────────────────────────────── */
+const UI_TO_DB_STATUS: Record<string, string> = {
+  ativo: "confirmed",
+  em_andamento: "in_transit",
+  entregue: "delivered",
+  cancelado: "cancelled",
+};
 
-function loadOrders(): FreightOrder[] {
-  try {
-    const raw = localStorage.getItem("tradexa_freight_orders");
-    if (raw) return JSON.parse(raw) as FreightOrder[];
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function saveOrders(list: FreightOrder[]) {
-  localStorage.setItem("tradexa_freight_orders", JSON.stringify(list));
-}
+const DB_TO_UI_STATUS: Record<string, string> = {
+  pending: "ativo",
+  confirmed: "ativo",
+  picked_up: "em_andamento",
+  in_transit: "em_andamento",
+  delivered: "entregue",
+  cancelled: "cancelado",
+};
 
 function formatDateTime(iso: string): string {
   try {
@@ -77,13 +78,59 @@ const FILTROS: { value: FiltroStatus; label: string }[] = [
 export function Fretes() {
   const profile = useAuthStore((s) => s.profile);
   const [filtro, setFiltro] = useState<FiltroStatus>("todos");
+  const [orders, setOrders] = useState<FreightOrder[]>([]);
 
   const carrierId = profile?.id;
 
-  const allOrders = useMemo(() => {
-    if (!carrierId) return [];
-    return loadOrders().filter((o) => o.carrier_id === carrierId);
-  }, [carrierId]);
+  const loadOrders = useCallback(async () => {
+    if (!carrierId) {
+      setOrders([]);
+      return;
+    }
+
+    // Load orders with the related quotation data via a join
+    const { data, error } = await (supabase.from("orders") as any)
+      .select("*, quotation:quotation_id(*)")
+      .eq("carrier_id", carrierId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao carregar fretes:", error);
+      return;
+    }
+
+    setOrders(
+      ((data || []) as any[]).map((o: any) => {
+        const q = o.quotation || {};
+        return {
+          id: o.id,
+          cotacao_id: o.quotation_id,
+          shipper_id: o.shipper_id,
+          carrier_id: o.carrier_id,
+          carrier_nome: profile?.name ?? "Transportadora",
+          origem_cidade: q.origin_city || "",
+          origem_estado: q.origin_state || "",
+          destino_cidade: q.destination_city || "",
+          destino_estado: q.destination_state || "",
+          carga_descricao: q.cargo_description || "",
+          peso_kg: q.weight_kg || 0,
+          volume_m3: q.volume_m3 || 0,
+          valor: o.price,
+          prazo_dias: 0,
+          status: (DB_TO_UI_STATUS[o.status] ?? "ativo") as "ativo" | "em_andamento" | "entregue" | "cancelado",
+          data_coleta: o.pickup_date || "",
+          data_entrega: o.delivery_date || "",
+          created_at: o.created_at || "",
+        };
+      }),
+    );
+  }, [carrierId, profile?.name]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  const allOrders = useMemo(() => orders, [orders]);
 
   const filtered = useMemo(
     () => allOrders.filter((o) => filtro === "todos" || o.status === filtro),
@@ -95,15 +142,25 @@ export function Fretes() {
     [filtered],
   );
 
-  const handleUpdateStatus = (orderId: string, newStatus: FreightOrder["status"]) => {
-    const all = loadOrders();
-    const updated = all.map((o) =>
-      o.id === orderId ? { ...o, status: newStatus } : o,
-    );
-    saveOrders(updated);
-    // Force re-render by toggling state
-    setFiltro((prev) => prev as FiltroStatus);
-  };
+  const handleUpdateStatus = useCallback(
+    async (orderId: string, newStatus: FreightOrder["status"]) => {
+      const dbStatus = UI_TO_DB_STATUS[newStatus] ?? newStatus;
+      const { error } = await (supabase.from("orders") as any)
+        .update({ status: dbStatus })
+        .eq("id", orderId);
+
+      if (error) {
+        console.error("Erro ao atualizar status do frete:", error);
+        return;
+      }
+
+      // Update local state optimistically
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)),
+      );
+    },
+    [],
+  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">

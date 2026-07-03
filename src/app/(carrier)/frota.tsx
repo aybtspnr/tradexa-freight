@@ -1,5 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Truck, Pencil, Trash2, X } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
+import { useAuthStore } from "@/stores/authStore";
 
 type TipoVeiculo = "caminhao" | "van" | "carreta" | "utililitario" | "bitrem" | "rodotrem";
 type StatusVeiculo = "disponivel" | "em_rota" | "manutencao" | "inativo";
@@ -54,22 +56,19 @@ const TIPO_LABELS: Record<string, string> = {
   rodotrem: "Rodotrem",
 };
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10);
-}
+// Mapping between UI status and DB status
+const UI_TO_DB_STATUS: Record<string, string> = {
+  disponivel: "available",
+  em_rota: "in_transit",
+  manutencao: "maintenance",
+  inativo: "maintenance",
+};
 
-function loadVeiculos(): Veiculo[] {
-  try {
-    const raw = localStorage.getItem("tradexa_frota");
-    return raw ? (JSON.parse(raw) as Veiculo[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveVeiculos(veiculos: Veiculo[]) {
-  localStorage.setItem("tradexa_frota", JSON.stringify(veiculos));
-}
+const DB_TO_UI_STATUS: Record<string, StatusVeiculo> = {
+  available: "disponivel",
+  in_transit: "em_rota",
+  maintenance: "manutencao",
+};
 
 function validarPlaca(placa: string): boolean {
   const mercosul = /^[A-Z]{3}\d[A-Z]\d{2}$/;
@@ -99,13 +98,43 @@ const EMPTY_FORM = {
 };
 
 export function Frota() {
-  const [veiculos, setVeiculos] = useState<Veiculo[]>(loadVeiculos);
+  const profile = useAuthStore((s) => s.profile);
+  const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [placaError, setPlacaError] = useState("");
 
-  const refresh = useCallback(() => setVeiculos(loadVeiculos()), []);
+  const loadVeiculos = useCallback(async () => {
+    if (!profile?.id) {
+      setVeiculos([]);
+      return;
+    }
+    const { data, error } = await (supabase.from("fleet") as any)
+      .select("*")
+      .eq("carrier_id", profile.id)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Erro ao carregar frota:", error);
+      return;
+    }
+    setVeiculos(
+      ((data || []) as any[]).map((v: any) => ({
+        id: v.id,
+        placa: v.plate,
+        modelo: v.model,
+        ano: v.year,
+        capacidade_kg: v.capacity_kg,
+        capacidade_m3: v.capacity_m3,
+        tipo: v.vehicle_type as TipoVeiculo,
+        status: DB_TO_UI_STATUS[v.status] ?? ("manutencao" as StatusVeiculo),
+      })),
+    );
+  }, [profile?.id]);
+
+  useEffect(() => {
+    loadVeiculos();
+  }, [loadVeiculos]);
 
   const openNew = useCallback(() => {
     setEditingId(null);
@@ -129,7 +158,8 @@ export function Frota() {
     setModalOpen(true);
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (!profile?.id) return;
     if (!form.placa || !form.modelo || form.ano < 1900) return;
     const placaUpper = form.placa.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!validarPlaca(placaUpper)) {
@@ -137,30 +167,51 @@ export function Frota() {
       return;
     }
     setPlacaError("");
-    const todas = loadVeiculos();
+
+    const dbStatus = UI_TO_DB_STATUS[form.status] ?? "available";
+    const record: any = {
+      carrier_id: profile.id,
+      plate: formatarPlaca(placaUpper),
+      model: form.modelo,
+      year: form.ano,
+      capacity_kg: form.capacidade_kg,
+      capacity_m3: form.capacidade_m3,
+      vehicle_type: form.tipo,
+      has_gps: false,
+      status: dbStatus,
+    };
+
     if (editingId) {
-      const updated = todas.map((v) =>
-        v.id === editingId ? { ...v, ...form, placa: formatarPlaca(placaUpper) } : v,
-      );
-      saveVeiculos(updated);
+      const { error } = await (supabase.from("fleet") as any).update(record).eq("id", editingId);
+      if (error) {
+        console.error("Erro ao atualizar veículo:", error);
+        return;
+      }
     } else {
-      const novo: Veiculo = { id: generateId(), ...form, placa: formatarPlaca(placaUpper) };
-      saveVeiculos([...todas, novo]);
+      const { error } = await (supabase.from("fleet") as any).insert(record);
+      if (error) {
+        console.error("Erro ao cadastrar veículo:", error);
+        return;
+      }
     }
-    refresh();
+
+    await loadVeiculos();
     setModalOpen(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
-  }, [form, editingId, refresh]);
+  }, [form, editingId, profile?.id, loadVeiculos]);
 
   const handleExcluir = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!window.confirm("Excluir este veículo?")) return;
-      const todas = loadVeiculos().filter((v) => v.id !== id);
-      saveVeiculos(todas);
-      refresh();
+      const { error } = await (supabase.from("fleet") as any).delete().eq("id", id);
+      if (error) {
+        console.error("Erro ao excluir veículo:", error);
+        return;
+      }
+      await loadVeiculos();
     },
-    [refresh],
+    [loadVeiculos],
   );
 
   const statusCounts = {

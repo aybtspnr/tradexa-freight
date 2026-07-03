@@ -1,5 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, MapPin, ArrowRight, ToggleLeft, ToggleRight, Trash2, X } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
+import { useAuthStore } from "@/stores/authStore";
 
 interface Rota {
   id: string;
@@ -47,30 +49,14 @@ function calcularDistancia(origem: Cidade, destino: Cidade): number {
   return Math.round(100 * Math.sqrt(dlat * dlat + dlon * dlon));
 }
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10);
-}
-
-function loadRotas(): Rota[] {
-  try {
-    const raw = localStorage.getItem("tradexa_rotas");
-    return raw ? (JSON.parse(raw) as Rota[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveRotas(rotas: Rota[]) {
-  localStorage.setItem("tradexa_rotas", JSON.stringify(rotas));
-}
-
 const STATUS_STYLES: Record<string, string> = {
   ativa: "bg-emerald-50 text-emerald-700 border-emerald-200",
   inativa: "bg-gray-50 text-gray-600 border-gray-200",
 };
 
 export function Rotas() {
-  const [rotas, setRotas] = useState<Rota[]>(loadRotas);
+  const profile = useAuthStore((s) => s.profile);
+  const [rotas, setRotas] = useState<Rota[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({
     cidade_origem: "",
@@ -79,9 +65,39 @@ export function Rotas() {
     estado_destino: "",
   });
 
-  const refresh = useCallback(() => setRotas(loadRotas()), []);
+  const loadRotas = useCallback(async () => {
+    if (!profile?.id) {
+      setRotas([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("routes")
+      .select("*")
+      .eq("carrier_id", profile.id)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Erro ao carregar rotas:", error);
+      return;
+    }
+    setRotas(
+      ((data || []) as any[]).map((r: any) => ({
+        id: r.id,
+        cidade_origem: r.origin_city,
+        estado_origem: r.origin_state,
+        cidade_destino: r.destination_city,
+        estado_destino: r.destination_state,
+        distancia_km: r.distance_km,
+        status: r.active ? ("ativa" as const) : ("inativa" as const),
+      })),
+    );
+  }, [profile?.id]);
 
-  const handleCadastrar = useCallback(() => {
+  useEffect(() => {
+    loadRotas();
+  }, [loadRotas]);
+
+  const handleCadastrar = useCallback(async () => {
+    if (!profile?.id) return;
     const origem = CIDADES.find(
       (c) => c.nome === form.cidade_origem && c.estado === form.estado_origem,
     );
@@ -92,40 +108,50 @@ export function Rotas() {
     if (origem.nome === destino.nome && origem.estado === destino.estado) return;
 
     const distancia = calcularDistancia(origem, destino);
-    const nova: Rota = {
-      id: generateId(),
-      cidade_origem: origem.nome,
-      estado_origem: origem.estado,
-      cidade_destino: destino.nome,
-      estado_destino: destino.estado,
-      distancia_km: distancia,
-      status: "ativa",
-    };
-    const todas = [...loadRotas(), nova];
-    saveRotas(todas);
-    refresh();
+    const { error } = await (supabase.from("routes") as any).insert({
+      carrier_id: profile.id,
+      origin_city: origem.nome,
+      origin_state: origem.estado,
+      destination_city: destino.nome,
+      destination_state: destino.estado,
+      distance_km: distancia,
+      active: true,
+    });
+    if (error) {
+      console.error("Erro ao cadastrar rota:", error);
+      return;
+    }
+    await loadRotas();
     setModalOpen(false);
     setForm({ cidade_origem: "", estado_origem: "", cidade_destino: "", estado_destino: "" });
-  }, [form, refresh]);
+  }, [form, profile?.id, loadRotas]);
 
   const handleToggleStatus = useCallback(
-    (id: string) => {
-      const todas = loadRotas().map((r) =>
-        r.id === id ? { ...r, status: r.status === "ativa" ? "inativa" as const : "ativa" as const } : r,
-      );
-      saveRotas(todas);
-      refresh();
+    async (id: string) => {
+      const rota = rotas.find((r) => r.id === id);
+      if (!rota) return;
+      const { error } = await (supabase.from("routes") as any)
+        .update({ active: rota.status === "inativa" })
+        .eq("id", id);
+      if (error) {
+        console.error("Erro ao alterar status:", error);
+        return;
+      }
+      await loadRotas();
     },
-    [refresh],
+    [rotas, loadRotas],
   );
 
   const handleExcluir = useCallback(
-    (id: string) => {
-      const todas = loadRotas().filter((r) => r.id !== id);
-      saveRotas(todas);
-      refresh();
+    async (id: string) => {
+      const { error } = await (supabase.from("routes") as any).delete().eq("id", id);
+      if (error) {
+        console.error("Erro ao excluir rota:", error);
+        return;
+      }
+      await loadRotas();
     },
-    [refresh],
+    [loadRotas],
   );
 
   return (

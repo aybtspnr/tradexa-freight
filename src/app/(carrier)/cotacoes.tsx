@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
+import { supabase } from "@/lib/supabase/client";
 
 /* ─── Types ───────────────────────────────────────────────── */
 
@@ -50,47 +51,18 @@ interface Vehicle {
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-}
+const STATUS_DB_TO_UI: Record<string, string> = {
+  open: "aberta",
+  bidding: "com_ofertas",
+  closed: "fechada",
+  cancelled: "fechada",
+};
 
-function loadCotacoes(): Cotacao[] {
-  try {
-    const raw = localStorage.getItem("tradexa_freight_quotations");
-    if (raw) return JSON.parse(raw) as Cotacao[];
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function saveCotacoes(list: Cotacao[]) {
-  localStorage.setItem("tradexa_freight_quotations", JSON.stringify(list));
-}
-
-function loadBids(): Bid[] {
-  try {
-    const raw = localStorage.getItem("tradexa_freight_bids");
-    if (raw) return JSON.parse(raw) as Bid[];
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function saveBids(list: Bid[]) {
-  localStorage.setItem("tradexa_freight_bids", JSON.stringify(list));
-}
-
-function loadVehicles(): Vehicle[] {
-  try {
-    const raw = localStorage.getItem("tradexa_frota");
-    if (raw) return JSON.parse(raw) as Vehicle[];
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
+const BID_STATUS_DB_TO_UI: Record<string, string> = {
+  pending: "pendente",
+  accepted: "aceita",
+  rejected: "recusada",
+};
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
@@ -100,7 +72,6 @@ function formatDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-");
   return `${d}/${m}/${y}`;
 }
-
 
 const TIPO_CARGA_LABEL: Record<string, string> = {
   caixa: "Caixa",
@@ -123,15 +94,15 @@ const TIPO_VEICULO_LABEL: Record<string, string> = {
 export function Cotacoes() {
   const profile = useAuthStore((s) => s.profile);
 
-  const [cotacoes, setCotacoes] = useState<Cotacao[]>(() =>
-    loadCotacoes().filter((c) => c.status === "aberta" || c.status === "com_ofertas"),
-  );
+  const [cotacoes, setCotacoes] = useState<Cotacao[]>([]);
+  const [bids, setBids] = useState<Bid[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [filtro, setFiltro] = useState<"disponiveis" | "fiz_oferta">("disponiveis");
   const [modalOpen, setModalOpen] = useState<Cotacao | null>(null);
   const [bidForm, setBidForm] = useState({
     preco: 0,
     prazo_dias: 3,
-    veiculo: "",
+    vehicle_id: "",
     observacoes: "",
   });
   const [enviando, setEnviando] = useState(false);
@@ -139,18 +110,99 @@ export function Cotacoes() {
   const carrierId = profile?.id;
   const carrierNome = profile?.name ?? "Minha Transportadora";
 
-  const refresh = useCallback(() => {
-    setCotacoes(
-      loadCotacoes().filter((c) => c.status === "aberta" || c.status === "com_ofertas"),
-    );
-  }, []);
+  /* ─── Load data ─────────────────────────────────── */
+
+  const loadData = useCallback(async () => {
+    if (!carrierId) {
+      setCotacoes([]);
+      setBids([]);
+      setVehicles([]);
+      return;
+    }
+
+    // Load available vehicles (fleet with status 'available')
+    const { data: fleetData } = await (supabase.from("fleet") as any)
+      .select("*")
+      .eq("carrier_id", carrierId)
+      .eq("status", "available");
+    if (fleetData) {
+      setVehicles(
+        ((fleetData || []) as any[]).map((v: any) => ({
+          id: v.id,
+          placa: v.plate,
+          modelo: v.model,
+          ano: v.year,
+          capacidade_kg: v.capacity_kg,
+          capacidade_m3: v.capacity_m3,
+          tipo: v.vehicle_type,
+          status: "disponivel",
+        })),
+      );
+    }
+
+    // Load open quotations (not created by this carrier)
+    const { data: cotData } = await (supabase.from("quotations") as any)
+      .select("*")
+      .neq("shipper_id", carrierId)
+      .in("status", ["open", "bidding"])
+      .order("created_at", { ascending: false });
+    if (cotData) {
+      setCotacoes(
+        ((cotData || []) as any[]).map((c: any) => ({
+          id: c.id,
+          shipper_id: c.shipper_id,
+          tipo_carga: c.cargo_type || "",
+          descricao: c.cargo_description || "",
+          peso_kg: c.weight_kg,
+          volume_m3: c.volume_m3,
+          origem_cidade: c.origin_city,
+          origem_estado: c.origin_state,
+          destino_cidade: c.destination_city,
+          destino_estado: c.destination_state,
+          data_coleta: c.pickup_date || "",
+          data_entrega: c.delivery_date || "",
+          refrigerado: false,
+          perigoso: false,
+          seguro: false,
+          status: (STATUS_DB_TO_UI[c.status] ?? "aberta") as "aberta" | "com_ofertas" | "fechada",
+          ofertas_recebidas: 0,
+          created_at: c.created_at || "",
+        })),
+      );
+    }
+
+    // Load this carrier's bids
+    const { data: bidData } = await (supabase.from("quotation_bids") as any)
+      .select("*")
+      .eq("carrier_id", carrierId)
+      .order("created_at", { ascending: false });
+    if (bidData) {
+      setBids(
+        ((bidData || []) as any[]).map((b: any) => ({
+          id: b.id,
+          cotacao_id: b.quotation_id,
+          carrier_id: b.carrier_id,
+          carrier_nome: carrierNome,
+          preco: b.price,
+          prazo_dias: b.estimated_days,
+          veiculo: b.vehicle_id || "",
+          observacoes: b.notes || "",
+          status: (BID_STATUS_DB_TO_UI[b.status] ?? "pendente") as "pendente" | "aceita" | "recusada",
+          created_at: b.created_at || "",
+        })),
+      );
+    }
+  }, [carrierId, carrierNome]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   /* ─── Filter logic ─────────────────────────────── */
 
   const allBidsForMe = useMemo(() => {
-    if (!carrierId) return [];
-    return loadBids().filter((b) => b.carrier_id === carrierId);
-  }, [carrierId]);
+    return bids;
+  }, [bids]);
 
   const cotacaoIdsQueFizOferta = useMemo(
     () => new Set(allBidsForMe.map((b) => b.cotacao_id)),
@@ -164,19 +216,13 @@ export function Cotacoes() {
     return cotacoes.filter((c) => !cotacaoIdsQueFizOferta.has(c.id));
   }, [cotacoes, filtro, cotacaoIdsQueFizOferta]);
 
-  /* ─── Available vehicles ───────────────────────── */
-
-  const vehicles = useMemo(() => {
-    return loadVehicles().filter((v) => v.status === "disponivel");
-  }, []);
-
   /* ─── Open bid modal ───────────────────────────── */
 
   const handleFazerOferta = useCallback((cotacao: Cotacao) => {
     setBidForm({
-      preco: Math.round(cotacao.peso_kg * 0.5 * 100) / 100, // suggested price based on weight
+      preco: Math.round(cotacao.peso_kg * 0.5 * 100) / 100,
       prazo_dias: 3,
-      veiculo: "",
+      vehicle_id: "",
       observacoes: "",
     });
     setModalOpen(cotacao);
@@ -184,45 +230,33 @@ export function Cotacoes() {
 
   /* ─── Submit bid ───────────────────────────────── */
 
-  const handleEnviarOferta = useCallback(() => {
+  const handleEnviarOferta = useCallback(async () => {
     if (!carrierId || !modalOpen) return;
     if (bidForm.preco <= 0 || bidForm.prazo_dias <= 0) return;
 
     setEnviando(true);
 
-    const novaBid: Bid = {
-      id: generateId(),
-      cotacao_id: modalOpen.id,
+    const { error } = await (supabase.from("quotation_bids") as any).insert({
+      quotation_id: modalOpen.id,
       carrier_id: carrierId,
-      carrier_nome: carrierNome,
-      preco: bidForm.preco,
-      prazo_dias: bidForm.prazo_dias,
-      veiculo: bidForm.veiculo,
-      observacoes: bidForm.observacoes,
-      status: "pendente",
-      created_at: new Date().toISOString(),
-    };
+      price: bidForm.preco,
+      estimated_days: bidForm.prazo_dias,
+      vehicle_id: bidForm.vehicle_id || null,
+      driver_id: null,
+      notes: bidForm.observacoes || null,
+      status: "pending",
+    });
 
-    const todas = loadBids();
-    saveBids([novaBid, ...todas]);
-
-    // Update cotação: increment ofertas_recebidas and update status
-    const allCotacoes = loadCotacoes();
-    const updated = allCotacoes.map((c) =>
-      c.id === modalOpen.id
-        ? {
-            ...c,
-            ofertas_recebidas: c.ofertas_recebidas + 1,
-            status: ("com_ofertas" as const),
-          }
-        : c,
-    );
-    saveCotacoes(updated);
+    if (error) {
+      console.error("Erro ao enviar oferta:", error);
+      setEnviando(false);
+      return;
+    }
 
     setEnviando(false);
     setModalOpen(null);
-    refresh();
-  }, [carrierId, carrierNome, modalOpen, bidForm, refresh]);
+    await loadData();
+  }, [carrierId, modalOpen, bidForm, loadData]);
 
   /* ─── Render ───────────────────────────────────── */
 
@@ -431,13 +465,13 @@ export function Cotacoes() {
                   Veículo (opcional)
                 </label>
                 <select
-                  value={bidForm.veiculo}
-                  onChange={(e) => setBidForm((p) => ({ ...p, veiculo: e.target.value }))}
+                  value={bidForm.vehicle_id}
+                  onChange={(e) => setBidForm((p) => ({ ...p, vehicle_id: e.target.value }))}
                   className="w-full rounded-lg border border-border px-3 py-2.5 text-sm text-gray-900 focus:border-primary focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Selecione um veículo...</option>
                   {vehicles.map((v) => (
-                    <option key={v.id} value={`${v.placa} — ${v.modelo}`}>
+                    <option key={v.id} value={v.id}>
                       {v.placa} — {v.modelo} ({TIPO_VEICULO_LABEL[v.tipo] ?? v.tipo})
                     </option>
                   ))}

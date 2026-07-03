@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
+import { useAuthStore } from "@/stores/authStore";
 
 /* ─── Types ───────────────────────────────────────────────── */
 
@@ -24,34 +26,6 @@ interface TabelaFrete {
   validade: string;
 }
 
-/* ─── Helpers ────────────────────────────────────────────── */
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10);
-}
-
-function loadRotas(): Rota[] {
-  try {
-    const raw = localStorage.getItem("tradexa_rotas");
-    return raw ? (JSON.parse(raw) as Rota[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function loadTabelas(): TabelaFrete[] {
-  try {
-    const raw = localStorage.getItem("tradexa_tabelas");
-    return raw ? (JSON.parse(raw) as TabelaFrete[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveTabelas(tabelas: TabelaFrete[]) {
-  localStorage.setItem("tradexa_tabelas", JSON.stringify(tabelas));
-}
-
 /* ─── Initial form state ─────────────────────────────────── */
 
 const EMPTY_FORM = {
@@ -67,14 +41,71 @@ const EMPTY_FORM = {
 /* ─── Component ──────────────────────────────────────────── */
 
 export function Tabelas() {
-  const [tabelas, setTabelas] = useState<TabelaFrete[]>(loadTabelas);
+  const profile = useAuthStore((s) => s.profile);
+  const [tabelas, setTabelas] = useState<TabelaFrete[]>([]);
+  const [rotas, setRotas] = useState<Rota[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  const rotas = loadRotas().filter((r) => r.status === "ativa");
+  const loadData = useCallback(async () => {
+    if (!profile?.id) {
+      setTabelas([]);
+      setRotas([]);
+      return;
+    }
+    // Load active routes for the dropdown
+    const { data: rotasData, error: rotasError } = await (supabase.from("routes") as any)
+      .select("*")
+      .eq("carrier_id", profile.id)
+      .eq("active", true);
+    if (rotasError) {
+      console.error("Erro ao carregar rotas:", rotasError);
+    }
+    const rotasList: Rota[] = ((rotasData || []) as any[]).map((r: any) => ({
+      id: r.id,
+      cidade_origem: r.origin_city,
+      estado_origem: r.origin_state,
+      cidade_destino: r.destination_city,
+      estado_destino: r.destination_state,
+      distancia_km: r.distance_km,
+      status: r.active ? "ativa" : "inativa",
+    }));
+    setRotas(rotasList);
 
-  const refresh = useCallback(() => setTabelas(loadTabelas()), []);
+    // Load freight tables
+    const { data, error } = await (supabase.from("freight_tables") as any)
+      .select("*")
+      .eq("carrier_id", profile.id)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Erro ao carregar tabelas:", error);
+      return;
+    }
+    setTabelas(
+      ((data || []) as any[]).map((t: any) => {
+        const rota = rotasList.find((r) => r.id === t.route_id);
+        const rotaLabel = rota
+          ? `${rota.cidade_origem}/${rota.estado_origem} → ${rota.cidade_destino}/${rota.estado_destino}`
+          : "";
+        return {
+          id: t.id,
+          nome: t.name,
+          rota_id: t.route_id,
+          rota_label: rotaLabel,
+          preco_kg: t.price_per_kg,
+          preco_m3: t.price_per_m3,
+          preco_km: t.price_per_km,
+          valor_minimo: t.min_price,
+          validade: t.valid_until || "",
+        };
+      }),
+    );
+  }, [profile?.id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const openNew = useCallback(() => {
     setEditingId(null);
@@ -96,7 +127,8 @@ export function Tabelas() {
     setModalOpen(true);
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (!profile?.id) return;
     if (!form.nome || !form.rota_id || !form.validade) return;
 
     const rota = rotas.find((r) => r.id === form.rota_id);
@@ -104,38 +136,69 @@ export function Tabelas() {
       ? `${rota.cidade_origem}/${rota.estado_origem} → ${rota.cidade_destino}/${rota.estado_destino}`
       : "";
 
-    const todas = loadTabelas();
+    const record: any = {
+      carrier_id: profile.id,
+      route_id: form.rota_id,
+      name: form.nome,
+      price_per_kg: form.preco_kg,
+      price_per_m3: form.preco_m3,
+      price_per_km: form.preco_km,
+      min_price: form.valor_minimo,
+      valid_until: form.validade,
+      active: true,
+    };
 
     if (editingId) {
-      const updated = todas.map((t) =>
-        t.id === editingId
-          ? { ...t, ...form, rota_label: rotaLabel }
-          : t,
+      const { error } = await (supabase.from("freight_tables") as any).update(record).eq("id", editingId);
+      if (error) {
+        console.error("Erro ao atualizar tabela:", error);
+        return;
+      }
+      // Update local state
+      setTabelas((prev) =>
+        prev.map((t) =>
+          t.id === editingId ? { ...t, ...form, rota_label: rotaLabel } : t,
+        ),
       );
-      saveTabelas(updated);
     } else {
-      const nova: TabelaFrete = {
-        id: generateId(),
-        ...form,
-        rota_label: rotaLabel,
-      };
-      saveTabelas([...todas, nova]);
+      const { data, error } = await (supabase.from("freight_tables") as any).insert(record).select();
+      if (error) {
+        console.error("Erro ao cadastrar tabela:", error);
+        return;
+      }
+      if (data) {
+        const inserted = (data as any[])[0];
+        const nova: TabelaFrete = {
+          id: inserted.id,
+          nome: inserted.name,
+          rota_id: inserted.route_id,
+          rota_label: rotaLabel,
+          preco_kg: inserted.price_per_kg,
+          preco_m3: inserted.price_per_m3,
+          preco_km: inserted.price_per_km,
+          valor_minimo: inserted.min_price,
+          validade: inserted.valid_until || "",
+        };
+        setTabelas((prev) => [nova, ...prev]);
+      }
     }
 
-    refresh();
     setModalOpen(false);
     setForm(EMPTY_FORM);
     setEditingId(null);
-  }, [form, editingId, rotas, refresh]);
+  }, [form, editingId, profile?.id, rotas]);
 
   const handleExcluir = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!window.confirm("Excluir esta tabela de frete?")) return;
-      const todas = loadTabelas().filter((t) => t.id !== id);
-      saveTabelas(todas);
-      refresh();
+      const { error } = await (supabase.from("freight_tables") as any).delete().eq("id", id);
+      if (error) {
+        console.error("Erro ao excluir tabela:", error);
+        return;
+      }
+      setTabelas((prev) => prev.filter((t) => t.id !== id));
     },
-    [refresh],
+    [],
   );
 
   return (

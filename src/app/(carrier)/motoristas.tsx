@@ -1,5 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Users, Pencil, Trash2, X, Calendar } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
+import { useAuthStore } from "@/stores/authStore";
 
 type StatusMotorista = "disponivel" | "em_viagem" | "descanso" | "inativo";
 
@@ -35,23 +37,6 @@ const STATUS_LABELS: Record<string, string> = {
   inativo: "Inativo",
 };
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10);
-}
-
-function loadMotoristas(): Motorista[] {
-  try {
-    const raw = localStorage.getItem("tradexa_motoristas");
-    return raw ? (JSON.parse(raw) as Motorista[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveMotoristas(motoristas: Motorista[]) {
-  localStorage.setItem("tradexa_motoristas", JSON.stringify(motoristas));
-}
-
 function formatCPF(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 3) return digits;
@@ -78,12 +63,42 @@ const EMPTY_FORM = {
 };
 
 export function Motoristas() {
-  const [motoristas, setMotoristas] = useState<Motorista[]>(loadMotoristas);
+  const profile = useAuthStore((s) => s.profile);
+  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  const refresh = useCallback(() => setMotoristas(loadMotoristas()), []);
+  const loadMotoristas = useCallback(async () => {
+    if (!profile?.id) {
+      setMotoristas([]);
+      return;
+    }
+    const { data, error } = await (supabase.from("drivers") as any)
+      .select("*")
+      .eq("carrier_id", profile.id)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Erro ao carregar motoristas:", error);
+      return;
+    }
+    setMotoristas(
+      ((data || []) as any[]).map((d: any) => ({
+        id: d.id,
+        nome: d.name,
+        cpf: d.cpf,
+        cnh: d.cnh_number,
+        validade_cnh: d.cnh_expiry || "",
+        telefone: d.phone || "",
+        email: d.email || "",
+        status: d.active ? ("disponivel" as StatusMotorista) : ("inativo" as StatusMotorista),
+      })),
+    );
+  }, [profile?.id]);
+
+  useEffect(() => {
+    loadMotoristas();
+  }, [loadMotoristas]);
 
   const openNew = useCallback(() => {
     setEditingId(null);
@@ -105,31 +120,53 @@ export function Motoristas() {
     setModalOpen(true);
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (!profile?.id) return;
     if (!form.nome || !form.cpf || !form.cnh) return;
     if (form.cpf.replace(/\D/g, "").length !== 11) return;
-    const todas = loadMotoristas();
+
+    const record: any = {
+      carrier_id: profile.id,
+      name: form.nome,
+      cpf: form.cpf,
+      cnh_number: form.cnh,
+      cnh_expiry: form.validade_cnh || null,
+      phone: form.telefone || null,
+      email: form.email || null,
+      active: form.status !== "inativo",
+    };
+
     if (editingId) {
-      const updated = todas.map((m) => (m.id === editingId ? { ...m, ...form } : m));
-      saveMotoristas(updated);
+      const { error } = await (supabase.from("drivers") as any).update(record).eq("id", editingId);
+      if (error) {
+        console.error("Erro ao atualizar motorista:", error);
+        return;
+      }
     } else {
-      const novo: Motorista = { id: generateId(), ...form };
-      saveMotoristas([...todas, novo]);
+      const { error } = await (supabase.from("drivers") as any).insert(record);
+      if (error) {
+        console.error("Erro ao cadastrar motorista:", error);
+        return;
+      }
     }
-    refresh();
+
+    await loadMotoristas();
     setModalOpen(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
-  }, [form, editingId, refresh]);
+  }, [form, editingId, profile?.id, loadMotoristas]);
 
   const handleExcluir = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!window.confirm("Excluir este motorista?")) return;
-      const todas = loadMotoristas().filter((m) => m.id !== id);
-      saveMotoristas(todas);
-      refresh();
+      const { error } = await (supabase.from("drivers") as any).delete().eq("id", id);
+      if (error) {
+        console.error("Erro ao excluir motorista:", error);
+        return;
+      }
+      await loadMotoristas();
     },
-    [refresh],
+    [loadMotoristas],
   );
 
   return (
