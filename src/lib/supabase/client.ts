@@ -16,6 +16,6 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
   },
   db: {
-    schema: "freight",
+    schema: "freight" as any,
   },
 });
