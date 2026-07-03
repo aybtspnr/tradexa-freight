@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
 
 /* ─── Types ───────────────────────────────────────────────── */
@@ -18,27 +19,6 @@ interface CotacaoForm {
   refrigerado: boolean;
   perigoso: boolean;
   seguro: boolean;
-}
-
-interface Cotacao {
-  id: string;
-  shipper_id: string;
-  tipo_carga: string;
-  descricao: string;
-  peso_kg: number;
-  volume_m3: number;
-  origem_cidade: string;
-  origem_estado: string;
-  destino_cidade: string;
-  destino_estado: string;
-  data_coleta: string;
-  data_entrega: string;
-  refrigerado: boolean;
-  perigoso: boolean;
-  seguro: boolean;
-  status: "aberta" | "com_ofertas" | "fechada";
-  ofertas_recebidas: number;
-  created_at: string;
 }
 
 /* ─── Brazilian cities ─────────────────────────────────────── */
@@ -87,24 +67,6 @@ const TIPOS_CARGA = [
 ];
 
 /* ─── Helpers ────────────────────────────────────────────── */
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-}
-
-function loadCotacoes(): Cotacao[] {
-  try {
-    const raw = localStorage.getItem("tradexa_freight_quotations");
-    if (raw) return JSON.parse(raw) as Cotacao[];
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function saveCotacoes(list: Cotacao[]) {
-  localStorage.setItem("tradexa_freight_quotations", JSON.stringify(list));
-}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
@@ -207,37 +169,42 @@ export function Cotar() {
     if (step > 1) setStep((s) => s - 1);
   }, [step]);
 
-  const handlePublish = useCallback(() => {
+  const handlePublish = useCallback(async () => {
     if (!profile?.id) return;
     setSubmitting(true);
 
-    const nova: Cotacao = {
-      id: generateId(),
+    // Append special requirements to cargo description
+    let descricao = form.descricao;
+    const extras: string[] = [];
+    if (form.refrigerado) extras.push("Refrigerado");
+    if (form.perigoso) extras.push("Carga Perigosa");
+    if (form.seguro) extras.push("Seguro");
+    if (extras.length > 0) {
+      descricao += ` [${extras.join(", ")}]`;
+    }
+
+    const { error } = await (supabase as any).from("quotations").insert({
       shipper_id: profile.id,
-      tipo_carga: form.tipo_carga,
-      descricao: form.descricao,
-      peso_kg: form.peso_kg,
+      origin_city: form.origem_cidade,
+      origin_state: form.origem_estado,
+      destination_city: form.destino_cidade,
+      destination_state: form.destino_estado,
+      cargo_description: descricao,
+      weight_kg: form.peso_kg,
       volume_m3: form.volume_m3,
-      origem_cidade: form.origem_cidade,
-      origem_estado: form.origem_estado,
-      destino_cidade: form.destino_cidade,
-      destino_estado: form.destino_estado,
-      data_coleta: form.data_coleta,
-      data_entrega: form.data_entrega,
-      refrigerado: form.refrigerado,
-      perigoso: form.perigoso,
-      seguro: form.seguro,
-      status: "aberta",
-      ofertas_recebidas: 0,
-      created_at: new Date().toISOString(),
-    };
+      cargo_type: form.tipo_carga,
+      pickup_date: form.data_coleta,
+      delivery_date: form.data_entrega,
+    });
 
-    const todas = loadCotacoes();
-    saveCotacoes([nova, ...todas]);
-
-    setSuccess(true);
     setSubmitting(false);
 
+    if (error) {
+      console.error("Failed to publish quotation:", error);
+      return;
+    }
+
+    setSuccess(true);
     setTimeout(() => {
       navigate("/shipper/cotacoes");
     }, 1500);

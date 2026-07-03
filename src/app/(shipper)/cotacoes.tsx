@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
 
 /* ─── Types ───────────────────────────────────────────────── */
@@ -38,48 +39,9 @@ interface Bid {
   created_at: string;
 }
 
-interface FreightOrder {
-  id: string;
-  cotacao_id: string;
-  shipper_id: string;
-  carrier_id: string;
-  carrier_nome: string;
-  origem_cidade: string;
-  origem_estado: string;
-  destino_cidade: string;
-  destino_estado: string;
-  carga_descricao: string;
-  peso_kg: number;
-  volume_m3: number;
-  valor: number;
-  prazo_dias: number;
-  status: "ativo" | "em_andamento" | "entregue" | "cancelado";
-  data_coleta: string;
-  data_entrega: string;
-  created_at: string;
-}
-
 type FiltroStatus = "todas" | "aberta" | "com_ofertas" | "fechada";
 
 /* ─── Helpers ────────────────────────────────────────────── */
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-}
-
-function loadCotacoes(): Cotacao[] {
-  try {
-    const raw = localStorage.getItem("tradexa_freight_quotations");
-    if (raw) return JSON.parse(raw) as Cotacao[];
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function saveCotacoes(list: Cotacao[]) {
-  localStorage.setItem("tradexa_freight_quotations", JSON.stringify(list));
-}
 
 function loadBids(): Bid[] {
   try {
@@ -95,20 +57,28 @@ function saveBids(list: Bid[]) {
   localStorage.setItem("tradexa_freight_bids", JSON.stringify(list));
 }
 
-function loadOrders(): FreightOrder[] {
-  try {
-    const raw = localStorage.getItem("tradexa_freight_orders");
-    if (raw) return JSON.parse(raw) as FreightOrder[];
-  } catch {
-    /* ignore */
-  }
-  return [];
+function mapQuotationToCotacao(q: any): Cotacao {
+  return {
+    id: q.id,
+    shipper_id: q.shipper_id,
+    tipo_carga: q.cargo_type ?? "",
+    descricao: q.cargo_description ?? "",
+    peso_kg: Number(q.weight_kg) || 0,
+    volume_m3: Number(q.volume_m3) || 0,
+    origem_cidade: q.origin_city ?? "",
+    origem_estado: q.origin_state ?? "",
+    destino_cidade: q.destination_city ?? "",
+    destino_estado: q.destination_state ?? "",
+    data_coleta: q.pickup_date ?? "",
+    data_entrega: q.delivery_date ?? "",
+    refrigerado: false,
+    perigoso: false,
+    seguro: false,
+    status: q.status ?? "aberta",
+    ofertas_recebidas: 0,
+    created_at: q.created_at ?? "",
+  };
 }
-
-function saveOrders(list: FreightOrder[]) {
-  localStorage.setItem("tradexa_freight_orders", JSON.stringify(list));
-}
-
 
 function formatDateTime(iso: string): string {
   try {
@@ -142,9 +112,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function Cotacoes() {
   const profile = useAuthStore((s) => s.profile);
 
-  const [cotacoes, setCotacoes] = useState<Cotacao[]>(() =>
-    loadCotacoes().filter((c) => c.shipper_id === profile?.id),
-  );
+  const [cotacoes, setCotacoes] = useState<Cotacao[]>([]);
   const [filtro, setFiltro] = useState<FiltroStatus>("todas");
   const [ofertasModal, setOfertasModal] = useState<{
     cotacao: Cotacao;
@@ -152,8 +120,34 @@ export function Cotacoes() {
   } | null>(null);
   const [aceitando, setAceitando] = useState(false);
 
+  useEffect(() => {
+    if (!profile?.id) return;
+    (supabase as any)
+      .from("quotations")
+      .select("*")
+      .eq("shipper_id", profile.id)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }: { data: any; error: any }) => {
+        if (!error && data) {
+          setCotacoes(data.map(mapQuotationToCotacao));
+        } else if (error) {
+          console.error("Failed to load quotations:", error);
+        }
+      });
+  }, [profile?.id]);
+
   const refresh = useCallback(() => {
-    setCotacoes(loadCotacoes().filter((c) => c.shipper_id === profile?.id));
+    if (!profile?.id) return;
+    (supabase as any)
+      .from("quotations")
+      .select("*")
+      .eq("shipper_id", profile.id)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }: { data: any; error: any }) => {
+        if (!error && data) {
+          setCotacoes(data.map(mapQuotationToCotacao));
+        }
+      });
   }, [profile]);
 
   const filtered = useMemo(
@@ -172,22 +166,21 @@ export function Cotacoes() {
   /* ─── Accept offer ─────────────────────────────── */
 
   const handleAceitarOferta = useCallback(
-    (bid: Bid) => {
+    async (bid: Bid) => {
       if (!profile?.id) return;
       if (!window.confirm(`Aceitar oferta de ${bid.carrier_nome} no valor de R$ ${bid.preco.toFixed(2)}?`))
         return;
 
       setAceitando(true);
 
-      // Find the cotação
-      const allCotacoes = loadCotacoes();
-      const cotacao = allCotacoes.find((c) => c.id === bid.cotacao_id);
+      // Find the cotação from state (already loaded from Supabase)
+      const cotacao = cotacoes.find((c) => c.id === bid.cotacao_id);
       if (!cotacao) {
         setAceitando(false);
         return;
       }
 
-      // Update bid status
+      // Update bid status (localStorage for now — not yet on Supabase)
       const allBids = loadBids();
       const updatedBids = allBids.map((b) =>
         b.id === bid.id ? { ...b, status: "aceita" as const } : b,
@@ -202,41 +195,32 @@ export function Cotacoes() {
       );
       saveBids(finalBids);
 
-      // Update cotação status
-      const updatedCotacoes = allCotacoes.map((c) =>
-        c.id === cotacao.id ? { ...c, status: "fechada" as const } : c,
-      );
-      saveCotacoes(updatedCotacoes);
+      // Update quotation status in Supabase
+      await (supabase as any)
+        .from("quotations")
+        .update({ status: "closed" })
+        .eq("id", cotacao.id);
 
-      // Create order
-      const allOrders = loadOrders();
-      const newOrder: FreightOrder = {
-        id: generateId(),
-        cotacao_id: cotacao.id,
-        shipper_id: profile.id,
-        carrier_id: bid.carrier_id,
-        carrier_nome: bid.carrier_nome,
-        origem_cidade: cotacao.origem_cidade,
-        origem_estado: cotacao.origem_estado,
-        destino_cidade: cotacao.destino_cidade,
-        destino_estado: cotacao.destino_estado,
-        carga_descricao: cotacao.descricao,
-        peso_kg: cotacao.peso_kg,
-        volume_m3: cotacao.volume_m3,
-        valor: bid.preco,
-        prazo_dias: bid.prazo_dias,
-        status: "ativo",
-        data_coleta: cotacao.data_coleta,
-        data_entrega: cotacao.data_entrega,
-        created_at: new Date().toISOString(),
-      };
-      saveOrders([newOrder, ...allOrders]);
+      // Create order in Supabase
+      await (supabase as any)
+        .from("orders")
+        .insert({
+          quotation_id: cotacao.id,
+          shipper_id: profile.id,
+          carrier_id: bid.carrier_id,
+          bid_id: bid.id,
+          price: bid.preco,
+          status: "ativo",
+          pickup_date: cotacao.data_coleta,
+          delivery_date: cotacao.data_entrega,
+          notes: `Prazo: ${bid.prazo_dias} dias úteis. Veículo: ${bid.veiculo}. ${bid.observacoes}`,
+        });
 
       setAceitando(false);
       setOfertasModal(null);
       refresh();
     },
-    [profile, refresh],
+    [cotacoes, profile, refresh],
   );
 
   /* ─── Render ───────────────────────────────────── */

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
 
 /* ─── Types ───────────────────────────────────────────────── */
@@ -28,22 +29,35 @@ type FiltroStatus = "todos" | "ativo" | "em_andamento" | "entregue" | "cancelado
 
 /* ─── Helpers ────────────────────────────────────────────── */
 
-function loadOrders(): FreightOrder[] {
-  try {
-    const raw = localStorage.getItem("tradexa_freight_orders");
-    if (raw) return JSON.parse(raw) as FreightOrder[];
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
 function formatDateTime(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("pt-BR");
   } catch {
     return iso;
   }
+}
+
+function mapOrderToFreightOrder(o: any): FreightOrder {
+  return {
+    id: o.id,
+    cotacao_id: o.quotation_id,
+    shipper_id: o.shipper_id,
+    carrier_id: o.carrier_id,
+    carrier_nome: o.carrier?.name ?? "Transportadora",
+    origem_cidade: o.quotation?.origin_city ?? "",
+    origem_estado: o.quotation?.origin_state ?? "",
+    destino_cidade: o.quotation?.destination_city ?? "",
+    destino_estado: o.quotation?.destination_state ?? "",
+    carga_descricao: o.quotation?.cargo_description ?? "",
+    peso_kg: Number(o.quotation?.weight_kg) || 0,
+    volume_m3: Number(o.quotation?.volume_m3) || 0,
+    valor: Number(o.price) || 0,
+    prazo_dias: 0,
+    status: o.status ?? "ativo",
+    data_coleta: o.pickup_date ?? "",
+    data_entrega: o.delivery_date ?? "",
+    created_at: o.created_at ?? "",
+  };
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -72,12 +86,33 @@ const FILTROS: { value: FiltroStatus; label: string }[] = [
 
 export function Fretes() {
   const profile = useAuthStore((s) => s.profile);
+  const [orders, setOrders] = useState<FreightOrder[]>([]);
   const [filtro, setFiltro] = useState<FiltroStatus>("todos");
 
-  const allOrders = useMemo(() => {
-    if (!profile?.id) return [];
-    return loadOrders().filter((o) => o.shipper_id === profile.id);
-  }, [profile]);
+  useEffect(() => {
+    if (!profile?.id) return;
+    (supabase as any)
+      .from("orders")
+      .select(`
+        *,
+        quotation:quotation_id (
+          origin_city, origin_state, destination_city, destination_state,
+          cargo_description, weight_kg, volume_m3, pickup_date, delivery_date
+        ),
+        carrier:carrier_id (name)
+      `)
+      .eq("shipper_id", profile.id)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }: { data: any; error: any }) => {
+        if (!error && data) {
+          setOrders(data.map(mapOrderToFreightOrder));
+        } else if (error) {
+          console.error("Failed to load orders:", error);
+        }
+      });
+  }, [profile?.id]);
+
+  const allOrders = orders;
 
   const filtered = useMemo(
     () => allOrders.filter((o) => filtro === "todos" || o.status === filtro),
