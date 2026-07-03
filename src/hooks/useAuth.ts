@@ -6,35 +6,44 @@ export function useAuth() {
   const { user, loading, setUser, setLoading, getProfile } = useAuthStore();
 
   useEffect(() => {
+    let cancelled = false;
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
 
       if (u) {
-        // Fetch profile when user changes
-        getProfile();
+        // Fetch profile when user changes — await so loading stays true until profile is ready
+        await getProfile();
       } else {
         useAuthStore.setState({ profile: null });
       }
 
-      setLoading(false);
+      if (!cancelled) {
+        setLoading(false);
+      }
     });
 
     // Bootstrap the session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
 
       if (u) {
-        getProfile();
+        await getProfile();
       }
 
-      setLoading(false);
+      if (!cancelled) {
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { user, loading };

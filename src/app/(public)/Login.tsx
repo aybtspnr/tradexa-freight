@@ -30,7 +30,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
 
-  // Redirect if already logged in
+  // Redirect if already logged in (only after profile is loaded)
   useEffect(() => {
     if (!authLoading && user) {
       const { profile } = useAuthStore.getState();
@@ -38,9 +38,8 @@ export function Login() {
         navigate("/carrier", { replace: true });
       } else if (profile?.role === "shipper") {
         navigate("/shipper", { replace: true });
-      } else {
-        navigate("/", { replace: true });
       }
+      // If profile is null, let handleSubmit do the redirect
     }
   }, [user, authLoading, navigate]);
 
