@@ -1,0 +1,108 @@
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/stores/authStore";
+import {
+  LayoutDashboard, MapPin, Table, Truck, Users,
+  DollarSign, Package, FileText, Settings, LogOut,
+  ChevronDown,
+} from "lucide-react";
+
+const sidebarLinks = [
+  { to: "/carrier", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/carrier/rotas", label: "Rotas", icon: MapPin },
+  { to: "/carrier/tabelas", label: "Tabelas de Frete", icon: Table },
+  { to: "/carrier/frota", label: "Frota", icon: Truck },
+  { to: "/carrier/motoristas", label: "Motoristas", icon: Users },
+  { to: "/carrier/cotacoes", label: "Cotações", icon: DollarSign },
+  { to: "/carrier/fretes", label: "Fretes", icon: Package },
+  { to: "/carrier/documentos", label: "Documentos", icon: FileText },
+  { to: "/carrier/financeiro", label: "Financeiro", icon: DollarSign },
+  { to: "/carrier/config", label: "Configurações", icon: Settings },
+];
+
+export function CarrierLayout() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { profile, signOut } = useAuthStore();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/", { replace: true });
+  };
+
+  return (
+    <div className="flex min-h-screen bg-[#f8fafc]">
+      {/* Sidebar */}
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-[#0F111A] text-white">
+        {/* Logo */}
+        <div className="flex h-16 items-center gap-3 border-b border-white/[0.06] px-6">
+          <img
+            src="/logo-fretes.png"
+            alt="TradeXa Fretes"
+            width={74}
+            height={32}
+            className="h-8 w-auto brightness-0 invert"
+            loading="lazy"
+          />
+        </div>
+
+        {/* Nav links */}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+          {sidebarLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = location.pathname === link.to;
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium no-underline transition-all ${
+                  isActive
+                    ? "bg-[#2563eb] text-white shadow-sm"
+                    : "text-white/50 hover:bg-white/[0.06] hover:text-white"
+                }`}
+              >
+                <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-white/40"}`} />
+                <span>{link.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User + Logout */}
+        <div className="border-t border-white/[0.06] p-4">
+          <div className="mb-3 flex items-center gap-3 px-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2563eb] text-sm font-bold text-white">
+              {(profile?.name ?? "T").charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 truncate">
+              <p className="truncate text-sm font-medium text-white">{profile?.name ?? "Transportadora"}</p>
+              <p className="truncate text-xs text-white/40">{profile?.email ?? ""}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/50 transition-all hover:bg-white/[0.06] hover:text-white"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Sair</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="ml-64 flex flex-1 flex-col">
+        {/* Top header */}
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-4 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-xl px-6">
+          <div className="flex items-center gap-2 text-sm text-[#5E6278]">
+            <span>TradeXa Fretes</span>
+            <ChevronDown className="h-3 w-3" />
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 p-6 lg:p-8">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

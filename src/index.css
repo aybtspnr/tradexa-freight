@@ -1,38 +1,82 @@
 @import "tailwindcss";
 
-/* ========== Custom theme tokens (TradeXa Fretes) ========== */
-@theme {
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
-  --color-primary-light: #3b82f6;
-  --color-secondary: #f59e0b;
-  --color-accent: #10b981;
-  --color-background: #ffffff;
-  --color-surface: #f9fafb;
-  --color-text: #111827;
-  --color-text-muted: #6b7280;
-  --color-border: #e5e7eb;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+/* ─── CSS Variables (espelhando tradexa.com.br, com primary azul) ─── */
+:root {
+  --background: 210 33% 98%;
+  --foreground: 222 32% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 32% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 32% 14%;
+  --primary: 217 91% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 215 24% 93%;
+  --secondary-foreground: 222 28% 18%;
+  --muted: 214 24% 94%;
+  --muted-foreground: 221 16% 42%;
+  --accent: 217 91% 97%;
+  --accent-foreground: 217 91% 53%;
+  --destructive: 0 76% 56%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 218 23% 89%;
+  --input: 218 23% 89%;
+  --ring: 217 91% 53%;
+  --radius: 1.25rem;
+  --canvas: 210 33% 98%;
+  --surface: 0 0% 100%;
+  --surface-elevated: 210 29% 97%;
+  --surface-soft: 214 32% 94%;
+  --panel: 223 28% 17%;
+  --panel-foreground: 210 20% 98%;
+  --brand-soft: 217 91% 97%;
+  --brand-deep: 217 91% 30%;
+  --stroke-strong: 219 19% 82%;
+  --shadow-soft: 0 12px 32px -20px rgba(15, 23, 42, 0.18);
+  --shadow-elevated: 0 20px 48px -24px rgba(15, 23, 42, 0.22);
+  --shadow-brand: 0 12px 28px -16px rgba(37, 99, 235, 0.28);
 }
 
-/* ========== Base / reset ========== */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
+/* ─── Base ─── */
+*, *::before, *::after { box-sizing: border-box; }
+* { border-color: hsl(var(--border)); }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  font-family: var(--font-sans);
-  color: var(--color-text);
-  background-color: var(--color-background);
+  background-color: hsl(var(--canvas));
+  color: hsl(var(--foreground));
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-#root {
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+h1, h2, h3, h4, h5, h6 { font-weight: 900; letter-spacing: -0.025em; }
+a { transition: color, background-color, border-color 0.15s; }
+
+/* ─── Utility classes ─── */
+.surface-card {
+  background-color: hsl(var(--surface));
+  border: 1px solid hsl(var(--border));
+  box-shadow: var(--shadow-soft);
 }
+.glass-card {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid hsl(var(--border));
+  box-shadow: var(--shadow-soft);
+}
+.glow-border {
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.08), var(--shadow-soft);
+}
+.glow-border:hover {
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.18), var(--shadow-elevated);
+}
+.mesh-gradient {
+  background:
+    radial-gradient(ellipse at 20% 30%, hsl(var(--primary) / 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 70%, hsl(var(--primary) / 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, hsl(var(--primary) / 0.02) 0%, transparent 70%);
+}
+
+#root { min-height: 100svh; display: flex; flex-direction: column; }

@@ -1,40 +1,8 @@
--- TradeXa Fretes — Initial Schema
--- Migration 001: Create freight schema and core tables
-
--- 1. Create schema
-CREATE SCHEMA IF NOT EXISTS freight;
-
--- 2. Profiles (extends auth.users)
-CREATE TABLE freight.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT,
-    name TEXT,
-    phone TEXT,
-    role TEXT NOT NULL CHECK (role IN ('carrier', 'shipper', 'admin')) DEFAULT 'shipper',
-    avatar_url TEXT,
-    document_type TEXT CHECK (document_type IN ('cpf', 'cnpj')),
-    document_number TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Auto-create profile on user signup
-CREATE OR REPLACE FUNCTION freight.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO freight.profiles (id, email, name)
-    VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'name');
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW
-    EXECUTE FUNCTION freight.handle_new_user();
+-- TradeXa Fretes — Complete Schema
+-- Migration 001: Add remaining tables (profiles already created in 00001)
 
 -- 3. Routes (carrier routes)
-CREATE TABLE freight.routes (
+CREATE TABLE IF NOT EXISTS freight.routes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     carrier_id UUID NOT NULL REFERENCES freight.profiles(id) ON DELETE CASCADE,
     origin_city TEXT NOT NULL,
@@ -48,7 +16,7 @@ CREATE TABLE freight.routes (
 );
 
 -- 4. Freight tables (pricing)
-CREATE TABLE freight.freight_tables (
+CREATE TABLE IF NOT EXISTS freight.freight_tables (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     carrier_id UUID NOT NULL REFERENCES freight.profiles(id) ON DELETE CASCADE,
     route_id UUID REFERENCES freight.routes(id) ON DELETE CASCADE,
@@ -67,7 +35,7 @@ CREATE TABLE freight.freight_tables (
 );
 
 -- 5. Fleet
-CREATE TABLE freight.fleet (
+CREATE TABLE IF NOT EXISTS freight.fleet (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     carrier_id UUID NOT NULL REFERENCES freight.profiles(id) ON DELETE CASCADE,
     plate TEXT NOT NULL,
@@ -83,7 +51,7 @@ CREATE TABLE freight.fleet (
 );
 
 -- 6. Drivers
-CREATE TABLE freight.drivers (
+CREATE TABLE IF NOT EXISTS freight.drivers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     carrier_id UUID NOT NULL REFERENCES freight.profiles(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -98,7 +66,7 @@ CREATE TABLE freight.drivers (
 );
 
 -- 7. Quotations (shipper requests)
-CREATE TABLE freight.quotations (
+CREATE TABLE IF NOT EXISTS freight.quotations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     shipper_id UUID NOT NULL REFERENCES freight.profiles(id) ON DELETE CASCADE,
     origin_city TEXT NOT NULL,
@@ -117,7 +85,7 @@ CREATE TABLE freight.quotations (
 );
 
 -- 8. Bids (carrier offers)
-CREATE TABLE freight.quotation_bids (
+CREATE TABLE IF NOT EXISTS freight.quotation_bids (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     quotation_id UUID NOT NULL REFERENCES freight.quotations(id) ON DELETE CASCADE,
     carrier_id UUID NOT NULL REFERENCES freight.profiles(id) ON DELETE CASCADE,
@@ -131,7 +99,7 @@ CREATE TABLE freight.quotation_bids (
 );
 
 -- 9. Orders
-CREATE TABLE freight.orders (
+CREATE TABLE IF NOT EXISTS freight.orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     quotation_id UUID REFERENCES freight.quotations(id),
     shipper_id UUID NOT NULL REFERENCES freight.profiles(id),
@@ -148,7 +116,7 @@ CREATE TABLE freight.orders (
 );
 
 -- 10. Tracking events
-CREATE TABLE freight.tracking_events (
+CREATE TABLE IF NOT EXISTS freight.tracking_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL REFERENCES freight.orders(id) ON DELETE CASCADE,
     event_type TEXT NOT NULL CHECK (event_type IN ('picked_up', 'departed', 'arrived', 'in_transit', 'delivered', 'delayed', 'exception')),
@@ -160,7 +128,7 @@ CREATE TABLE freight.tracking_events (
 );
 
 -- 11. Payments
-CREATE TABLE freight.payments (
+CREATE TABLE IF NOT EXISTS freight.payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL REFERENCES freight.orders(id) ON DELETE CASCADE,
     shipper_id UUID NOT NULL REFERENCES freight.profiles(id),
@@ -176,7 +144,7 @@ CREATE TABLE freight.payments (
 );
 
 -- 12. Reviews
-CREATE TABLE freight.reviews (
+CREATE TABLE IF NOT EXISTS freight.reviews (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL UNIQUE REFERENCES freight.orders(id) ON DELETE CASCADE,
     reviewer_id UUID NOT NULL REFERENCES freight.profiles(id),
@@ -187,7 +155,7 @@ CREATE TABLE freight.reviews (
 );
 
 -- 13. Documents
-CREATE TABLE freight.documents (
+CREATE TABLE IF NOT EXISTS freight.documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     carrier_id UUID NOT NULL REFERENCES freight.profiles(id) ON DELETE CASCADE,
     order_id UUID REFERENCES freight.orders(id) ON DELETE SET NULL,
@@ -200,7 +168,7 @@ CREATE TABLE freight.documents (
 );
 
 -- 14. Notifications
-CREATE TABLE freight.notifications (
+CREATE TABLE IF NOT EXISTS freight.notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES freight.profiles(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
@@ -211,7 +179,7 @@ CREATE TABLE freight.notifications (
 );
 
 -- 15. Settings
-CREATE TABLE freight.settings (
+CREATE TABLE IF NOT EXISTS freight.settings (
     user_id UUID PRIMARY KEY REFERENCES freight.profiles(id) ON DELETE CASCADE,
     email_notifications BOOLEAN DEFAULT TRUE,
     push_notifications BOOLEAN DEFAULT TRUE,
@@ -219,15 +187,22 @@ CREATE TABLE freight.settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Add missing columns to profiles if not present
+ALTER TABLE freight.profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE freight.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE freight.profiles ADD COLUMN IF NOT EXISTS document_type TEXT;
+ALTER TABLE freight.profiles ADD COLUMN IF NOT EXISTS document_number TEXT;
+ALTER TABLE freight.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
 -- Indexes
-CREATE INDEX idx_routes_carrier ON freight.routes(carrier_id);
-CREATE INDEX idx_freight_tables_carrier ON freight.freight_tables(carrier_id);
-CREATE INDEX idx_fleet_carrier ON freight.fleet(carrier_id);
-CREATE INDEX idx_drivers_carrier ON freight.drivers(carrier_id);
-CREATE INDEX idx_quotations_shipper ON freight.quotations(shipper_id);
-CREATE INDEX idx_quotation_bids_carrier ON freight.quotation_bids(carrier_id);
-CREATE INDEX idx_orders_shipper ON freight.orders(shipper_id);
-CREATE INDEX idx_orders_carrier ON freight.orders(carrier_id);
-CREATE INDEX idx_tracking_events_order ON freight.tracking_events(order_id);
-CREATE INDEX idx_payments_order ON freight.payments(order_id);
-CREATE INDEX idx_notifications_user ON freight.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_routes_carrier ON freight.routes(carrier_id);
+CREATE INDEX IF NOT EXISTS idx_freight_tables_carrier ON freight.freight_tables(carrier_id);
+CREATE INDEX IF NOT EXISTS idx_fleet_carrier ON freight.fleet(carrier_id);
+CREATE INDEX IF NOT EXISTS idx_drivers_carrier ON freight.drivers(carrier_id);
+CREATE INDEX IF NOT EXISTS idx_quotations_shipper ON freight.quotations(shipper_id);
+CREATE INDEX IF NOT EXISTS idx_quotation_bids_carrier ON freight.quotation_bids(carrier_id);
+CREATE INDEX IF NOT EXISTS idx_orders_shipper ON freight.orders(shipper_id);
+CREATE INDEX IF NOT EXISTS idx_orders_carrier ON freight.orders(carrier_id);
+CREATE INDEX IF NOT EXISTS idx_tracking_events_order ON freight.tracking_events(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON freight.payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON freight.notifications(user_id);

@@ -1,301 +1,269 @@
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Sparkles, ArrowRight } from "lucide-react";
+import { FreightBentoGrid } from "@/components/premium/FreightBentoGrid";
+import { FreightModulesSection } from "@/components/premium/FreightModulesSection";
+import { useSeo } from "@/hooks/useSeo";
 
-const features = [
-  {
-    title: "Cotações em segundos",
-    desc: "Publique sua carga e receba propostas de transportadoras verificadas em minutos. Compare preços, prazos e condições.",
-  },
-  {
-    title: "Rastreamento em tempo real",
-    desc: "Acompanhe sua carga do início ao fim com GPS ao vivo, alertas de desvio e ETA inteligente com machine learning.",
-  },
-  {
-    title: "Pagamento seguro",
-    desc: "Pagamento online com split automático entre transportadora e plataforma. PIX, cartão ou boleto parcelado.",
-  },
-  {
-    title: "Transportadoras verificadas",
-    desc: "Todas as transportadoras passam por validação de documentos (RNTRC, CT-e, CNH). Score de reputação transparente.",
-  },
-  {
-    title: "Documentação digital",
-    desc: "CT-e, MDF-e e CIOT tudo digital. OCR com IA para extração automática de dados e alertas de vencimento.",
-  },
-  {
-    title: "Cross-sell TradeXa",
-    desc: "Importador classifica NCM no TradeXa e já usa os dados para cotar frete. Tudo integrado.",
-  },
-];
-
-const plans = [
-  {
-    name: "Free",
-    price: "Grátis",
-    desc: "Para começar",
-    features: [
-      "3 cotações/mês",
-      "Rastreamento básico",
-      "Perfil público",
-    ],
-    cta: "Começar grátis",
-    highlight: false,
-  },
-  {
-    name: "Pro",
-    price: "R$ 149/mês",
-    desc: "Para empresas",
-    features: [
-      "Cotações ilimitadas",
-      "Rastreamento premium",
-      "Documentação digital",
-      "Prioridade no suporte",
-    ],
-    cta: "Assinar Pro",
-    highlight: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Sob consulta",
-    desc: "Para grandes operações",
-    features: [
-      "Tudo do Pro",
-      "API dedicada",
-      "Gerente de conta",
-      "Personalização",
-    ],
-    cta: "Falar com vendas",
-    highlight: false,
-  },
-];
-
-const faqItems = [
+const faq = [
   {
     q: "Como funciona o processo de cotação?",
-    a: "Você preenche os dados da carga (origem, destino, peso, volume), publica a solicitação e transportadoras verificadas enviam suas propostas. Você compara e escolhe a melhor.",
+    a: "Você preenche os dados da carga (origem, destino, peso, volume), publica a solicitação e transportadoras verificadas enviam propostas em minutos. Você compara preços, prazos e condições e contrata com um clique.",
   },
   {
     q: "Preciso ter CNPJ para usar?",
-    a: "Sim, a plataforma é focada em pessoas jurídicas. Transportadoras precisam de CNPJ e documentação regular (RNTRC, CT-e).",
+    a: "Sim, a plataforma é focada em pessoas jurídicas. Transportadoras precisam de CNPJ e documentação regular (RNTRC). Embarcadores precisam de CNPJ para emissão de CT-e.",
   },
   {
-    q: "Como é feito o pagamento?",
-    a: "Pagamento online via Stripe Connect com split automático. Aceitamos PIX, cartão de crédito e boleto bancário.",
+    q: "Como funciona o pagamento?",
+    a: "Pagamento online via Stripe Connect com split automático. Aceitamos PIX (1,19%), cartão de crédito (3,99%) e boleto bancário (R$ 3,45). O valor é dividido automaticamente entre transportadora e plataforma.",
   },
   {
-    q: "Como funciona o rastreamento?",
-    a: "O motorista ativa o GPS pelo aplicativo PWA e você acompanha em tempo real pelo mapa. Recebe alertas de desvio e previsão de chegada.",
+    q: "Posso cancelar a qualquer momento?",
+    a: "Sim. Todos os planos pagos podem ser cancelados sem multa. Você mantém acesso até o final do período contratado. O plano Essential é gratuito e não requer cancelamento.",
+  },
+  {
+    q: "Como as transportadoras são verificadas?",
+    a: "Todos os parceiros passam por validação de documentação: RNTRC ativo, CNH dos motoristas, CRLV dos veículos e certidões negativas. Cada transportadora tem um score de reputação transparente.",
   },
 ];
 
 export function Home() {
+  const seo = useSeo({
+    title: "Plataforma de Fretes: Cotação, Rastreamento e Gestão",
+    description:
+      "Plataforma de fretes online: cotações em minutos, rastreamento GPS ao vivo e pagamento seguro. Conectamos embarcadores a transportadoras verificadas.",
+    keywords:
+      "frete, plataforma de fretes, cotação de frete, transportadora, embarcador, rastreamento de carga, frete online, TradeXa Fretes",
+    canonical: "https://www.tradexafretes.com.br",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          name: "TradeXa Fretes",
+          url: "https://www.tradexafretes.com.br",
+          description:
+            "Plataforma de fretes que conecta embarcadores a transportadoras verificadas. Cotações em minutos, rastreamento ao vivo e pagamento seguro.",
+        },
+        {
+          "@type": "Organization",
+          name: "TradeXa Fretes",
+          url: "https://www.tradexafretes.com.br",
+          logo: "https://www.tradexafretes.com.br/logo-fretes.png",
+          image: "https://www.tradexafretes.com.br/og-image.webp",
+          description:
+            "Plataforma de fretes que conecta embarcadores a transportadoras verificadas. Cotações em minutos, rastreamento ao vivo e pagamento seguro.",
+          inLanguage: "pt-BR",
+          areaServed: { "@type": "Country", name: "BR" },
+          contactPoint: {
+            "@type": "ContactPoint",
+            email: "help@tradexafretes.com.br",
+            contactType: "customer support",
+            availableLanguage: ["Portuguese", "English"],
+          },
+          sameAs: [
+            "https://www.linkedin.com/company/tradexa",
+            "https://www.instagram.com/tradexafretes",
+            "https://www.facebook.com/tradexafretes",
+            "https://www.youtube.com/@tradexafretes",
+          ],
+        },
+        {
+          "@type": "WebApplication",
+          name: "TradeXa Fretes",
+          description:
+            "Plataforma de fretes que conecta embarcadores a transportadoras verificadas. Cotações em minutos, rastreamento ao vivo e pagamento seguro.",
+          url: "https://www.tradexafretes.com.br",
+          applicationCategory: "BusinessApplication",
+          operatingSystem: "Any",
+          offers: {
+            "@type": "Offer",
+            price: "0",
+            priceCurrency: "BRL",
+          },
+        },
+        {
+          "@type": "FAQPage",
+          mainEntity: faq.map((item) => ({
+            "@type": "Question",
+            name: item.q,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: item.a,
+            },
+          })),
+        },
+        {
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://www.tradexafretes.com.br" },
+          ],
+        },
+      ],
+    },
+  });
+
   return (
     <>
-      {/* ── HERO ────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#F0F4F8] via-white to-white">
-        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
-          <div className="mx-auto max-w-3xl text-center">
-            <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
-              🚛 Marketplace de Transporte
+      {seo}
+      {/* ─── HERO ────────────────────────────────────────── */}
+      <section className="relative min-h-[85vh] flex flex-col justify-center overflow-hidden bg-gradient-to-br from-white via-gray-50 to-gray-100">
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full text-center">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mb-8 flex justify-center"
+          >
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#2563eb]/10 text-[#2563eb] border border-[#2563eb]/20 text-xs font-bold uppercase tracking-[0.2em]">
+              <Sparkles className="w-3.5 h-3.5" />
+              Plataforma de Fretes em Tempo Real
             </span>
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-text sm:text-5xl md:text-6xl">
-              Sua carga chegou até aqui.
-              <br />
-              <span className="text-primary">Agora faça ela chegar ao destino.</span>
-            </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-text-muted">
-              Conectamos embarcadores a transportadores de confiança. Cote,
-              contrate e rastreie fretes em todo o Brasil e América do Sul.
-            </p>
-            <div className="mt-10 flex items-center justify-center gap-4">
-              <Link
-                to="/cadastro"
-                className="rounded-lg bg-primary px-8 py-3 text-base font-semibold text-white no-underline shadow-sm transition-colors hover:bg-primary-dark"
-              >
-                Cotar frete agora
-              </Link>
-              <Link
-                to="/como-funciona"
-                className="rounded-lg border border-border bg-white px-8 py-3 text-base font-semibold text-text no-underline transition-colors hover:bg-surface"
-              >
-                Como funciona
-              </Link>
-            </div>
-          </div>
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-gray-900 leading-[1.1]"
+          >
+            Cotação, Rastreamento{" "}
+            <span className="inline-block text-[#2563eb]">
+              e Gestão de Fretes
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.6 }}
+            className="mt-6 text-lg sm:text-xl text-gray-500 max-w-2xl mx-auto font-medium leading-relaxed"
+          >
+            Conectamos embarcadores a transportadoras de confiança. Cotações em minutos,
+            rastreamento ao vivo e pagamento seguro — tudo em um só lugar.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4"
+          >
+            <Link
+              to="/cadastro"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#3b82f6] px-8 py-3.5 text-base font-bold text-white no-underline transition-all hover:shadow-xl"
+              style={{ boxShadow: "0 4px 20px rgba(37,99,235,0.4)" }}
+            >
+              Cotar frete agora <ArrowRight className="w-5 h-5" />
+            </Link>
+            <Link
+              to="/como-funciona"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-8 py-3.5 text-base font-semibold text-gray-700 no-underline transition-colors hover:bg-gray-100"
+            >
+              Como funciona
+            </Link>
+          </motion.div>
         </div>
-        {/* Gradient decoration */}
-        <div className="absolute -top-24 right-0 -z-10 h-96 w-96 rounded-full bg-primary/5 blur-3xl" />
-        <div className="absolute -bottom-24 left-0 -z-10 h-96 w-96 rounded-full bg-primary/5 blur-3xl" />
+
+        <motion.div
+          animate={{ y: [0, 8, 0] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 text-gray-400"
+        >
+          <svg className="w-6 h-6 rotate-90" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+          </svg>
+        </motion.div>
       </section>
 
-      {/* ── FEATURES ────────────────────────────────────── */}
-      <section className="bg-white py-20 sm:py-28">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold text-text sm:text-4xl">
-              Tudo que você precisa para{" "}
-              <span className="text-primary">transportar</span>
+      {/* ─── BENTO GRID ──────────────────────────────────── */}
+      <FreightBentoGrid />
+
+      {/* ─── MÓDULOS PREMIUM ─────────────────────────────── */}
+      <FreightModulesSection />
+
+      {/* ─── COMO FUNCIONA ────────────────────────────────── */}
+      <section className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#2563eb]/10 text-[#2563eb] border border-[#2563eb]/20 text-xs font-bold uppercase tracking-[0.2em] mb-5">
+              Como Funciona
+            </span>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-gray-900">
+              Sua carga em{" "}
+              <span className="text-[#2563eb]">3 passos simples</span>
             </h2>
-            <p className="mt-4 text-text-muted">
-              Uma plataforma completa para gerenciar suas cargas do início ao fim.
-            </p>
           </div>
-          <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
-              <div
-                key={f.title}
-                className="group rounded-xl border border-border bg-white p-6 shadow-sm transition-all hover:border-primary/20 hover:shadow-md"
-              >
-                <h3 className="text-lg font-semibold text-text group-hover:text-primary">
-                  {f.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                  {f.desc}
-                </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { step: "01", title: "Publique sua Carga", desc: "Informe origem, destino, peso e volume. Sua solicitação vai para transportadoras verificadas.", icon: "📋" },
+              { step: "02", title: "Compare Propostas", desc: "Receba propostas em minutos. Compare preços, prazos e condições das transportadoras.", icon: "📊" },
+              { step: "03", title: "Acompanhe sua Carga", desc: "Contrate e acompanhe sua carga em tempo real com GPS. Pagamento seguro integrado.", icon: "🚚" },
+            ].map((item) => (
+              <div key={item.step} className="p-8 rounded-2xl bg-white border border-gray-200 hover:border-[#2563eb]/30 hover:shadow-lg transition-all">
+                <div className="text-5xl font-black text-gray-200 mb-4">{item.step}</div>
+                <div className="w-12 h-12 rounded-xl bg-[#2563eb]/10 flex items-center justify-center mb-4">
+                  <span className="text-xl">{item.icon}</span>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
+                <p className="text-gray-500 leading-relaxed">{item.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── PRICING ─────────────────────────────────────── */}
-      <section className="bg-surface py-20 sm:py-28">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-bold text-text sm:text-4xl">
-              Planos <span className="text-primary">simples</span>
-            </h2>
-            <p className="mt-4 text-text-muted">
-              Escolha o plano ideal para o seu negócio.
-            </p>
-          </div>
-          <div className="mt-16 grid gap-8 lg:grid-cols-3">
-            {plans.map((plan) => (
-              <div
-                key={plan.name}
-                className={`rounded-xl border p-8 ${
-                  plan.highlight
-                    ? "border-primary bg-primary shadow-lg"
-                    : "border-border bg-white shadow-sm"
-                }`}
-              >
-                <h3
-                  className={`text-xl font-bold ${
-                    plan.highlight ? "text-white" : "text-text"
-                  }`}
-                >
-                  {plan.name}
-                </h3>
-                <p
-                  className={`mt-1 text-sm ${
-                    plan.highlight ? "text-primary/80" : "text-text-muted"
-                  }`}
-                >
-                  {plan.desc}
-                </p>
-                <p
-                  className={`mt-4 text-3xl font-bold ${
-                    plan.highlight ? "text-white" : "text-text"
-                  }`}
-                >
-                  {plan.price}
-                </p>
-                <ul className="mt-6 space-y-3">
-                  {plan.features.map((feat) => (
-                    <li
-                      key={feat}
-                      className={`flex items-center gap-2 text-sm ${
-                        plan.highlight ? "text-white/80" : "text-text-muted"
-                      }`}
-                    >
-                      <svg
-                        className={`h-4 w-4 shrink-0 ${
-                          plan.highlight ? "text-white" : "text-primary"
-                        }`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2}
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="m4.5 12.75 6 6 9-13.5"
-                        />
-                      </svg>
-                      {feat}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to="/cadastro"
-                  className={`mt-8 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold no-underline transition-colors ${
-                    plan.highlight
-                      ? "bg-white text-primary hover:bg-gray-100"
-                      : "bg-primary text-white hover:bg-primary-dark"
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── FAQ ─────────────────────────────────────────── */}
-      <section className="bg-white py-20 sm:py-28">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-text sm:text-4xl">
-              Perguntas <span className="text-primary">frequentes</span>
+      {/* ─── FAQ ─────────────────────────────────────────── */}
+      <section className="bg-white py-20">
+        <div className="mx-auto max-w-[900px] px-8">
+          <div className="text-center mb-12">
+            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#2563eb]/10 text-[#2563eb] border border-[#2563eb]/20 text-xs font-bold uppercase tracking-[0.2em] mb-5">
+              FAQ
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-gray-900">
+              Perguntas Frequentes
             </h2>
           </div>
-          <div className="mt-12 space-y-4">
-            {faqItems.map((item) => (
+          <div className="space-y-3">
+            {faq.map((item) => (
               <details
                 key={item.q}
-                className="group rounded-xl border border-border bg-white p-6 shadow-sm transition-all open:border-primary/20 open:shadow-md"
+                className="group rounded-[12px] bg-[#f1f5f9] p-5 transition-all open:bg-[#eef2ff]"
               >
-                <summary className="flex cursor-pointer items-center justify-between gap-4 text-base font-semibold text-text">
+                <summary className="flex cursor-pointer items-center justify-between gap-4 text-base font-semibold text-[#1e293b]">
                   {item.q}
-                  <svg
-                    className="h-5 w-5 shrink-0 text-text-muted transition-transform group-open:rotate-180"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m19.5 8.25-7.5 7.5-7.5-7.5"
-                    />
+                  <svg className="h-5 w-5 shrink-0 text-[#64748b] transition-transform group-open:rotate-180"
+                       fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                   </svg>
                 </summary>
-                <p className="mt-4 text-sm leading-relaxed text-text-muted">
-                  {item.a}
-                </p>
+                <p className="mt-3 text-sm leading-relaxed text-[#475569]">{item.a}</p>
               </details>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── CTA FINAL ───────────────────────────────────── */}
-      <section className="bg-gradient-to-r from-primary to-primary-dark py-20">
-        <div className="mx-auto max-w-2xl px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-white sm:text-4xl">
-            Pronto para começar?
+      {/* ─── CTA FINAL ───────────────────────────────────── */}
+      <section className="bg-gradient-to-br from-gray-50 to-gray-100 py-20 text-center">
+        <div className="mx-auto max-w-2xl px-8">
+          <h2 className="text-3xl sm:text-4xl font-black text-gray-900">
+            Comece gratuitamente agora
           </h2>
-          <p className="mt-4 text-lg text-white/80">
-            Junte-se a centenas de empresas que já usam a TradeXa Fretes.
+          <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-[#5E6278]">
+            Crie sua conta gratuita em menos de 2 minutos. Sem cartão de crédito.
+            Descubra como a TradeXa Fretes pode transformar suas operações de transporte.
           </p>
           <Link
             to="/cadastro"
-            className="mt-8 inline-block rounded-lg bg-white px-8 py-3 text-base font-semibold text-primary no-underline shadow-sm transition-colors hover:bg-gray-100"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#2563eb] to-[#3b82f6] px-10 py-4 text-lg font-bold text-white no-underline shadow-lg transition-all hover:shadow-xl"
+            style={{ boxShadow: "0 4px 20px rgba(37,99,235,0.4)" }}
           >
-            Criar conta gratuita
+            Criar conta gratuita <ArrowRight className="w-5 h-5" />
           </Link>
+          <p className="mt-3 text-[13px] text-[#64748b]">Comece gratuitamente. Sem cartão de crédito.</p>
         </div>
       </section>
     </>

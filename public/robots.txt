@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /carrier/
+Disallow: /shipper/
+
+Sitemap: https://www.tradexafretes.com.br/sitemap.xml

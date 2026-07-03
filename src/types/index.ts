@@ -1,5 +1,14 @@
 import type { User } from "@supabase/supabase-js";
 
+// ─── Profile ────────────────────────────────────────────────
+export interface Profile {
+  id: string;
+  email: string;
+  name: string;
+  role: "carrier" | "shipper" | "admin";
+  created_at: string;
+}
+
 // ─── User / Auth ───────────────────────────────────────────
 export type AuthUser = User;
 
