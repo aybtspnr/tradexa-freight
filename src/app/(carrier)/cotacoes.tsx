@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { supabase } from "@/lib/supabase/client";
+import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
+import { formatCurrency, formatDate, formatWeight, formatVolume } from "@/utils/format";
 
 /* ─── Types ───────────────────────────────────────────────── */
 
@@ -49,6 +51,13 @@ interface Vehicle {
   status: string;
 }
 
+interface Driver {
+  id: string;
+  nome: string;
+  cpf: string;
+  status: string;
+}
+
 /* ─── Helpers ────────────────────────────────────────────── */
 
 const STATUS_DB_TO_UI: Record<string, string> = {
@@ -63,15 +72,6 @@ const BID_STATUS_DB_TO_UI: Record<string, string> = {
   accepted: "aceita",
   rejected: "recusada",
 };
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return "";
-  if (dateStr.includes("T")) {
-    return new Date(dateStr).toLocaleDateString("pt-BR");
-  }
-  const [y, m, d] = dateStr.split("-");
-  return `${d}/${m}/${y}`;
-}
 
 const TIPO_CARGA_LABEL: Record<string, string> = {
   caixa: "Caixa",
@@ -97,15 +97,18 @@ export function Cotacoes() {
   const [cotacoes, setCotacoes] = useState<Cotacao[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [filtro, setFiltro] = useState<"disponiveis" | "fiz_oferta">("disponiveis");
   const [modalOpen, setModalOpen] = useState<Cotacao | null>(null);
   const [bidForm, setBidForm] = useState({
     preco: 0,
     prazo_dias: 3,
     vehicle_id: "",
+    driver_id: "",
     observacoes: "",
   });
   const [enviando, setEnviando] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const carrierId = profile?.id;
   const carrierNome = profile?.name ?? "Minha Transportadora";
@@ -117,80 +120,107 @@ export function Cotacoes() {
       setCotacoes([]);
       setBids([]);
       setVehicles([]);
+      setDrivers([]);
+      setLoading(false);
       return;
     }
 
-    // Load available vehicles (fleet with status 'available')
-    const { data: fleetData } = await (supabase.from("fleet") as any)
-      .select("*")
-      .eq("carrier_id", carrierId)
-      .eq("status", "available");
-    if (fleetData) {
-      setVehicles(
-        ((fleetData || []) as any[]).map((v: any) => ({
-          id: v.id,
-          placa: v.plate,
-          modelo: v.model,
-          ano: v.year,
-          capacidade_kg: v.capacity_kg,
-          capacidade_m3: v.capacity_m3,
-          tipo: v.vehicle_type,
-          status: "disponivel",
-        })),
-      );
-    }
+    setLoading(true);
+    try {
+      // Load available vehicles (fleet with status 'available')
+      const { data: fleetData } = await (supabase.from("fleet") as any)
+        .select("*")
+        .eq("carrier_id", carrierId)
+        .eq("status", "available");
+      if (fleetData) {
+        setVehicles(
+          ((fleetData || []) as any[]).map((v: any) => ({
+            id: v.id,
+            placa: v.plate,
+            modelo: v.model,
+            ano: v.year,
+            capacidade_kg: v.capacity_kg,
+            capacidade_m3: v.capacity_m3,
+            tipo: v.vehicle_type,
+            status: "disponivel",
+          })),
+        );
+      }
 
-    // Load open quotations (not created by this carrier)
-    const { data: cotData } = await (supabase.from("quotations") as any)
-      .select("*")
-      .neq("shipper_id", carrierId)
-      .in("status", ["open", "bidding"])
-      .order("created_at", { ascending: false });
-    if (cotData) {
-      setCotacoes(
-        ((cotData || []) as any[]).map((c: any) => ({
-          id: c.id,
-          shipper_id: c.shipper_id,
-          tipo_carga: c.cargo_type || "",
-          descricao: c.cargo_description || "",
-          peso_kg: c.weight_kg,
-          volume_m3: c.volume_m3,
-          origem_cidade: c.origin_city,
-          origem_estado: c.origin_state,
-          destino_cidade: c.destination_city,
-          destino_estado: c.destination_state,
-          data_coleta: c.pickup_date || "",
-          data_entrega: c.delivery_date || "",
-          refrigerado: false,
-          perigoso: false,
-          seguro: false,
-          status: (STATUS_DB_TO_UI[c.status] ?? "aberta") as "aberta" | "com_ofertas" | "fechada",
-          ofertas_recebidas: 0,
-          created_at: c.created_at || "",
-        })),
-      );
-    }
+      // Load available drivers
+      const { data: driverData } = await (supabase.from("drivers") as any)
+        .select("*")
+        .eq("carrier_id", carrierId)
+        .eq("active", true);
+      if (driverData) {
+        setDrivers(
+          ((driverData || []) as any[]).map((d: any) => ({
+            id: d.id,
+            nome: d.name,
+            cpf: d.cpf,
+            status: "disponivel",
+          })),
+        );
+      }
 
-    // Load this carrier's bids
-    const { data: bidData } = await (supabase.from("quotation_bids") as any)
-      .select("*")
-      .eq("carrier_id", carrierId)
-      .order("created_at", { ascending: false });
-    if (bidData) {
-      setBids(
-        ((bidData || []) as any[]).map((b: any) => ({
-          id: b.id,
-          cotacao_id: b.quotation_id,
-          carrier_id: b.carrier_id,
-          carrier_nome: carrierNome,
-          preco: b.price,
-          prazo_dias: b.estimated_days,
-          veiculo: b.vehicle_id || "",
-          observacoes: b.notes || "",
-          status: (BID_STATUS_DB_TO_UI[b.status] ?? "pendente") as "pendente" | "aceita" | "recusada",
-          created_at: b.created_at || "",
-        })),
-      );
+      // Load open quotations (not created by this carrier)
+      const { data: cotData } = await (supabase.from("quotations") as any)
+        .select("*")
+        .neq("shipper_id", carrierId)
+        .in("status", ["open", "bidding"])
+        .order("created_at", { ascending: false });
+      if (cotData) {
+        setCotacoes(
+          ((cotData || []) as any[]).map((c: any) => ({
+            id: c.id,
+            shipper_id: c.shipper_id,
+            tipo_carga: c.cargo_type || "",
+            descricao: c.cargo_description || "",
+            peso_kg: c.weight_kg,
+            volume_m3: c.volume_m3,
+            origem_cidade: c.origin_city,
+            origem_estado: c.origin_state,
+            destino_cidade: c.destination_city,
+            destino_estado: c.destination_state,
+            data_coleta: c.pickup_date || "",
+            data_entrega: c.delivery_date || "",
+            refrigerado: false,
+            perigoso: false,
+            seguro: false,
+            status: (STATUS_DB_TO_UI[c.status] ?? "aberta") as "aberta" | "com_ofertas" | "fechada",
+            ofertas_recebidas: 0,
+            created_at: c.created_at || "",
+          })),
+        );
+      }
+
+      // Load this carrier's bids
+      const { data: bidData } = await (supabase.from("quotation_bids") as any)
+        .select("*, vehicle:vehicle_id(plate, model), driver:driver_id(name)")
+        .eq("carrier_id", carrierId)
+        .order("created_at", { ascending: false });
+      if (bidData) {
+        setBids(
+          ((bidData || []) as any[]).map((b: any) => ({
+            id: b.id,
+            cotacao_id: b.quotation_id,
+            carrier_id: b.carrier_id,
+            carrier_nome: carrierNome,
+            preco: b.price,
+            prazo_dias: b.estimated_days,
+            veiculo: b.vehicle
+              ? `${b.vehicle.plate} — ${b.vehicle.model}`
+              : b.vehicle_id || "",
+            observacoes: b.notes || "",
+            status: (BID_STATUS_DB_TO_UI[b.status] ?? "pendente") as "pendente" | "aceita" | "recusada",
+            created_at: b.created_at || "",
+          })),
+        );
+      }
+    } catch (err) {
+      console.error("Error loading data:", err);
+    } finally {
+      setLoading(false);
     }
   }, [carrierId, carrierNome]);
 
@@ -200,9 +230,7 @@ export function Cotacoes() {
 
   /* ─── Filter logic ─────────────────────────────── */
 
-  const allBidsForMe = useMemo(() => {
-    return bids;
-  }, [bids]);
+  const allBidsForMe = useMemo(() => bids, [bids]);
 
   const cotacaoIdsQueFizOferta = useMemo(
     () => new Set(allBidsForMe.map((b) => b.cotacao_id)),
@@ -223,6 +251,7 @@ export function Cotacoes() {
       preco: Math.round(cotacao.peso_kg * 0.5 * 100) / 100,
       prazo_dias: 3,
       vehicle_id: "",
+      driver_id: "",
       observacoes: "",
     });
     setModalOpen(cotacao);
@@ -242,7 +271,7 @@ export function Cotacoes() {
       price: bidForm.preco,
       estimated_days: bidForm.prazo_dias,
       vehicle_id: bidForm.vehicle_id || null,
-      driver_id: null,
+      driver_id: bidForm.driver_id || null,
       notes: bidForm.observacoes || null,
       status: "pending",
     });
@@ -257,6 +286,18 @@ export function Cotacoes() {
     setModalOpen(null);
     await loadData();
   }, [carrierId, modalOpen, bidForm, loadData]);
+
+  /* ─── Loading state ────────────────────────────── */
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </div>
+    );
+  }
 
   /* ─── Render ───────────────────────────────────── */
 
@@ -292,111 +333,136 @@ export function Cotacoes() {
         </button>
       </div>
 
-      {/* Cards grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.length === 0 && (
-          <div className="col-span-full py-16 text-center text-gray-400">
-            {filtro === "disponiveis"
-              ? "Nenhuma cotação disponível no momento."
-              : "Você ainda não fez ofertas."}
+      {/* Empty state - no quotations available */}
+      {filtered.length === 0 && cotacoes.length === 0 && filtro === "disponiveis" && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-white px-6 py-16 shadow-sm">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-50">
+            <span className="text-3xl">🔍</span>
           </div>
-        )}
+          <h3 className="text-lg font-semibold text-gray-900">Nenhuma cotação disponível no momento</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            As cotações aparecerão aqui quando embarcadores publicarem cargas.
+          </p>
+          <div className="mt-6 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+            <p className="font-medium">💡 Dica:</p>
+            <p className="mt-1 text-xs">
+              Cadastre suas rotas e tabelas de frete para aparecer nas buscas dos embarcadores.
+            </p>
+          </div>
+        </div>
+      )}
 
-        {filtered.map((c) => {
-          const myBid = filtro === "fiz_oferta"
-            ? allBidsForMe.find((b) => b.cotacao_id === c.id)
-            : null;
+      {/* Empty state - no bids made yet */}
+      {filtered.length === 0 && cotacoes.length > 0 && filtro === "fiz_oferta" && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-white px-6 py-16 shadow-sm">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50">
+            <span className="text-3xl">💼</span>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Você ainda não fez ofertas</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Navegue pelas cotações disponíveis e faça sua primeira oferta.
+          </p>
+          <button
+            onClick={() => setFiltro("disponiveis")}
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-[#1d4ed8] shadow-sm"
+          >
+            Ver Cotações Disponíveis
+          </button>
+        </div>
+      )}
 
-          return (
-            <div
-              key={c.id}
-              className="flex flex-col rounded-xl border border-border bg-white p-5 transition-shadow hover:shadow-md"
-            >
-              {/* Route */}
-              <div className="mb-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                  <span>{c.origem_cidade}/{c.origem_estado}</span>
-                  <span className="text-gray-400">→</span>
-                  <span>{c.destino_cidade}/{c.destino_estado}</span>
-                </div>
-              </div>
+      {/* Empty filter result */}
+      {filtered.length === 0 && cotacoes.length > 0 && filtro === "disponiveis" && cotacoes.some(c => !cotacaoIdsQueFizOferta.has(c.id)) === false && (
+        <div className="rounded-xl border border-border bg-white py-12 text-center text-gray-400">
+          Você já fez ofertas para todas as cotações disponíveis.
+        </div>
+      )}
 
-              {/* Cargo info */}
-              <div className="mb-3 space-y-1 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                    {TIPO_CARGA_LABEL[c.tipo_carga] ?? c.tipo_carga}
-                  </span>
-                  <span>{c.peso_kg} kg</span>
-                  <span>{c.volume_m3} m³</span>
-                </div>
-                <p className="line-clamp-2 text-xs text-gray-500">{c.descricao}</p>
-              </div>
+      {/* Cards grid */}
+      {filtered.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((c) => {
+            const myBid = filtro === "fiz_oferta"
+              ? allBidsForMe.find((b) => b.cotacao_id === c.id)
+              : null;
 
-              {/* Badges */}
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {c.refrigerado && (
-                  <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                    🧊 Refrigerado
-                  </span>
-                )}
-                {c.perigoso && (
-                  <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                    ☢️ Perigoso
-                  </span>
-                )}
-                {c.seguro && (
-                  <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                    🛡️ Seguro
-                  </span>
-                )}
-              </div>
-
-              {/* Dates */}
-              <div className="mb-4 text-xs text-gray-400">
-                Coleta: {formatDate(c.data_coleta)} | Entrega: {formatDate(c.data_entrega)}
-              </div>
-
-              {/* Spacer + Action */}
-              <div className="mt-auto flex items-center justify-between">
-                <span className="text-xs text-gray-400">
-                  {c.ofertas_recebidas} oferta{c.ofertas_recebidas !== 1 ? "s" : ""}
-                </span>
-
-                {myBid ? (
-                  <div className="text-right">
-                    <span className="block text-sm font-semibold text-green-700">
-                      R$ {myBid.preco.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </span>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                        myBid.status === "aceita"
-                          ? "bg-green-100 text-green-700"
-                          : myBid.status === "recusada"
-                            ? "bg-gray-100 text-gray-500"
-                            : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {myBid.status === "aceita"
-                        ? "✅ Aceita"
-                        : myBid.status === "recusada"
-                          ? "Recusada"
-                          : "⏳ Pendente"}
-                    </span>
+            return (
+              <div
+                key={c.id}
+                className="flex flex-col rounded-xl border border-border bg-white p-5 transition-shadow hover:shadow-md"
+              >
+                {/* Route */}
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                    <span>{c.origem_cidade}/{c.origem_estado}</span>
+                    <span className="text-gray-400">→</span>
+                    <span>{c.destino_cidade}/{c.destino_estado}</span>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => handleFazerOferta(c)}
-                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark"
-                  >
-                    Fazer Oferta
-                  </button>
-                )}
+                </div>
+
+                {/* Cargo info */}
+                <div className="mb-3 space-y-1 text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                      {TIPO_CARGA_LABEL[c.tipo_carga] ?? c.tipo_carga}
+                    </span>
+                    <span>{formatWeight(c.peso_kg)}</span>
+                    <span>{formatVolume(c.volume_m3)}</span>
+                  </div>
+                  <p className="line-clamp-2 text-xs text-gray-500">{c.descricao}</p>
+                </div>
+
+                {/* Badges */}
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {c.refrigerado && (
+                    <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      🧊 Refrigerado
+                    </span>
+                  )}
+                  {c.perigoso && (
+                    <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                      ☢️ Perigoso
+                    </span>
+                  )}
+                  {c.seguro && (
+                    <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      🛡️ Seguro
+                    </span>
+                  )}
+                </div>
+
+                {/* Dates */}
+                <div className="mb-4 text-xs text-gray-400">
+                  Coleta: {formatDate(c.data_coleta)} | Entrega: {formatDate(c.data_entrega)}
+                </div>
+
+                {/* Spacer + Action */}
+                <div className="mt-auto flex items-center justify-between">
+                  <span className="text-xs text-gray-400">
+                    {c.ofertas_recebidas} oferta{c.ofertas_recebidas !== 1 ? "s" : ""}
+                  </span>
+
+                  {myBid ? (
+                    <div className="text-right">
+                      <span className="block text-sm font-semibold text-green-700">
+                        {formatCurrency(myBid.preco)}
+                      </span>
+                      <OrderStatusBadge status={myBid.status === "aceita" ? "entregue" : myBid.status === "recusada" ? "cancelado" : "ativo"} />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleFazerOferta(c)}
+                      className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark"
+                    >
+                      Dar Lance
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Bid Modal ──────────────────────────────── */}
       {modalOpen && (
@@ -419,7 +485,7 @@ export function Cotacoes() {
               <br />
               <span className="text-xs">
                 {TIPO_CARGA_LABEL[modalOpen.tipo_carga] ?? modalOpen.tipo_carga} —{" "}
-                {modalOpen.peso_kg} kg / {modalOpen.volume_m3} m³
+                {formatWeight(modalOpen.peso_kg)} / {formatVolume(modalOpen.volume_m3)}
               </span>
             </div>
 
@@ -427,7 +493,7 @@ export function Cotacoes() {
               {/* Preço */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Preço (R$)
+                  Preço (R$) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -445,7 +511,7 @@ export function Cotacoes() {
               {/* Prazo */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Prazo (dias úteis)
+                  Prazo (dias úteis) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -462,7 +528,7 @@ export function Cotacoes() {
               {/* Veículo */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Veículo (opcional)
+                  Veículo
                 </label>
                 <select
                   value={bidForm.vehicle_id}
@@ -483,10 +549,34 @@ export function Cotacoes() {
                 )}
               </div>
 
+              {/* Motorista (NEW) */}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Motorista
+                </label>
+                <select
+                  value={bidForm.driver_id}
+                  onChange={(e) => setBidForm((p) => ({ ...p, driver_id: e.target.value }))}
+                  className="w-full rounded-lg border border-border px-3 py-2.5 text-sm text-gray-900 focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Selecione um motorista...</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.nome}
+                    </option>
+                  ))}
+                </select>
+                {drivers.length === 0 && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Nenhum motorista disponível cadastrado.
+                  </p>
+                )}
+              </div>
+
               {/* Observações */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Observações (opcional)
+                  Observações
                 </label>
                 <textarea
                   value={bidForm.observacoes}

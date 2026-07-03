@@ -1,55 +1,183 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Package, TrendingUp, FileText, Star,
   ArrowUpRight, Plus, Truck, MapPin, Users,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
+import { useAuthStore } from "@/stores/authStore";
+import { formatCurrency, formatDate } from "@/utils/format";
+import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
+
+/* ─── Types ───────────────────────────────────────────────── */
 
 interface Freight {
   id: string;
   origin: string;
   destination: string;
   value: number;
-  status: "active" | "in_transit" | "delivered" | "cancelled";
+  status: string;
   date: string;
 }
 
-const MOCK_FRETES: Freight[] = [
-  { id: "1", origin: "São Paulo, SP", destination: "Rio de Janeiro, RJ", value: 4500, status: "active", date: "15/06/2026" },
-  { id: "2", origin: "Belo Horizonte, MG", destination: "Vitória, ES", value: 3200, status: "in_transit", date: "14/06/2026" },
-  { id: "3", origin: "Curitiba, PR", destination: "Florianópolis, SC", value: 2800, status: "delivered", date: "12/06/2026" },
-  { id: "4", origin: "Brasília, DF", destination: "Goiânia, GO", value: 1900, status: "active", date: "16/06/2026" },
-  { id: "5", origin: "Salvador, BA", destination: "Recife, PE", value: 5100, status: "delivered", date: "10/06/2026" },
-];
+interface DashboardData {
+  activeFreights: number;
+  monthlyRevenue: number;
+  availableQuotes: number;
+  rating: number;
+  totalVehicles: number;
+  totalDrivers: number;
+  recentFreights: Freight[];
+  loading: boolean;
+  error: string | null;
+}
 
-const STATUS_LABELS: Record<string, string> = {
-  active: "Ativo",
-  in_transit: "Em trânsito",
-  delivered: "Entregue",
-  cancelled: "Cancelado",
-};
-
-const STATUS_STYLES: Record<string, string> = {
-  active: "bg-blue-50 text-blue-700 border-blue-200",
-  in_transit: "bg-amber-50 text-amber-700 border-amber-200",
-  delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  cancelled: "bg-red-50 text-red-700 border-red-200",
-};
+/* ─── Component ──────────────────────────────────────────── */
 
 export function Dashboard() {
-  const kpis = useMemo(
-    () => ({
-      activeFreights: MOCK_FRETES.filter((f) => f.status === "active" || f.status === "in_transit").length,
-      monthlyRevenue: MOCK_FRETES.filter((f) => f.status === "delivered").reduce((s, f) => s + f.value, 0),
-      availableQuotes: 12,
-      rating: 4.8,
-      totalVehicles: 6,
-      totalDrivers: 8,
-    }),
-    [],
-  );
+  const profile = useAuthStore((s) => s.profile);
+  const [data, setData] = useState<DashboardData>({
+    activeFreights: 0,
+    monthlyRevenue: 0,
+    availableQuotes: 0,
+    rating: 4.8,
+    totalVehicles: 0,
+    totalDrivers: 0,
+    recentFreights: [],
+    loading: true,
+    error: null,
+  });
 
-  const recentFreights = useMemo(() => MOCK_FRETES.slice(0, 5), []);
+  useEffect(() => {
+    if (!profile?.id) {
+      setData((prev) => ({ ...prev, loading: false }));
+      return;
+    }
+
+    const fetchDashboard = async () => {
+      try {
+        // Load orders for this carrier
+        const { data: fretes, error: err1 } = await (supabase as any)
+          .from("orders")
+          .select("*, quotation:quotation_id(*)")
+          .eq("carrier_id", profile.id)
+          .order("created_at", { ascending: false });
+
+        if (err1) throw err1;
+
+        // Load fleet
+        const { data: frota, error: err3 } = await (supabase as any)
+          .from("fleet")
+          .select("*")
+          .eq("carrier_id", profile.id);
+
+        if (err3) throw err3;
+
+        // Load drivers
+        const { data: motoristas, error: err4 } = await (supabase as any)
+          .from("drivers")
+          .select("*")
+          .eq("carrier_id", profile.id);
+
+        if (err4) throw err4;
+
+        // Load available quotations (open/bidding, not created by this carrier)
+        const { data: cotacoes, error: err5 } = await (supabase as any)
+          .from("quotations")
+          .select("*")
+          .neq("shipper_id", profile.id)
+          .in("status", ["open", "bidding"]);
+
+        if (err5) throw err5;
+
+        const orders = (fretes || []) as any[];
+        const fleet = (frota || []) as any[];
+        const drivers = (motoristas || []) as any[];
+        const availableQuotesList = (cotacoes || []) as any[];
+
+        // Calculate KPIs
+        const activeFreights = orders.filter(
+          (f: any) =>
+            f.status === "confirmed" ||
+            f.status === "picked_up" ||
+            f.status === "in_transit",
+        ).length;
+
+        const monthlyRevenue = orders
+          .filter((f: any) => f.status === "delivered")
+          .reduce((sum: number, f: any) => sum + Number(f.price || 0), 0);
+
+        const totalVehicles = fleet.length;
+        const totalDrivers = drivers.length;
+        const availableQuotes = availableQuotesList.length;
+
+        // Recent freights (top 5)
+        const recentFreights: Freight[] = orders.slice(0, 5).map((o: any) => {
+          const q = o.quotation || {};
+          return {
+            id: o.id,
+            origin: `${q.origin_city || ""}, ${q.origin_state || ""}`,
+            destination: `${q.destination_city || ""}, ${q.destination_state || ""}`,
+            value: Number(o.price) || 0,
+            status: o.status === "pending" ? "ativo" :
+                    o.status === "confirmed" ? "ativo" :
+                    o.status === "picked_up" ? "em_andamento" :
+                    o.status === "in_transit" ? "em_andamento" :
+                    o.status === "delivered" ? "entregue" :
+                    o.status === "cancelled" ? "cancelado" : "ativo",
+            date: formatDate(o.created_at),
+          };
+        });
+
+        setData({
+          activeFreights,
+          monthlyRevenue,
+          availableQuotes,
+          rating: 4.8,
+          totalVehicles,
+          totalDrivers,
+          recentFreights,
+          loading: false,
+          error: null,
+        });
+      } catch (err: any) {
+        console.error("Carrier dashboard error:", err);
+        setData((prev) => ({
+          ...prev,
+          loading: false,
+          error: err.message || "Erro ao carregar dashboard",
+        }));
+      }
+    };
+
+    fetchDashboard();
+  }, [profile?.id]);
+
+  /* ─── Loading state ─────────────────────────────── */
+
+  if (data.loading) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#2563eb] border-t-transparent" />
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── Error state ───────────────────────────────── */
+
+  if (data.error) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+          <p className="text-red-700">{data.error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── Render ────────────────────────────────────── */
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -74,42 +202,42 @@ export function Dashboard() {
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Fretes Ativos"
-          value={kpis.activeFreights.toString()}
+          value={data.activeFreights.toString()}
           icon={Package}
           color="#2563eb"
           bgColor="bg-blue-50"
         />
         <KpiCard
           label="Faturamento (mês)"
-          value={`R$ ${kpis.monthlyRevenue.toLocaleString("pt-BR")}`}
+          value={formatCurrency(data.monthlyRevenue)}
           icon={TrendingUp}
           color="#10b981"
           bgColor="bg-emerald-50"
         />
         <KpiCard
           label="Cotações"
-          value={kpis.availableQuotes.toString()}
+          value={data.availableQuotes.toString()}
           icon={FileText}
           color="#f59e0b"
           bgColor="bg-amber-50"
         />
         <KpiCard
           label="Avaliação"
-          value={`${kpis.rating}`}
+          value={`${data.rating}`}
           icon={Star}
           color="#8b5cf6"
           bgColor="bg-purple-50"
         />
         <KpiCard
           label="Veículos"
-          value={kpis.totalVehicles.toString()}
+          value={data.totalVehicles.toString()}
           icon={Truck}
           color="#0ea5e9"
           bgColor="bg-sky-50"
         />
         <KpiCard
           label="Motoristas"
-          value={kpis.totalDrivers.toString()}
+          value={data.totalDrivers.toString()}
           icon={Users}
           color="#ec4899"
           bgColor="bg-pink-50"
@@ -153,44 +281,49 @@ export function Dashboard() {
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold uppercase text-[#5E6278]">
-                <th className="px-6 py-3">Origem</th>
-                <th className="px-6 py-3">Destino</th>
-                <th className="px-6 py-3">Valor</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Data</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e2e8f0]">
-              {recentFreights.map((f) => (
-                <tr key={f.id} className="transition-colors hover:bg-[#f8fafc]">
-                  <td className="px-6 py-4 font-medium text-[#0F111A]">{f.origin}</td>
-                  <td className="px-6 py-4 text-[#5E6278]">{f.destination}</td>
-                  <td className="px-6 py-4 font-medium text-[#0F111A]">
-                    R$ {f.value.toLocaleString("pt-BR")}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                        STATUS_STYLES[f.status]
-                      }`}
-                    >
-                      {STATUS_LABELS[f.status]}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-[#5E6278]">{f.date}</td>
+
+        {data.recentFreights.length === 0 ? (
+          <div className="px-6 py-12 text-center text-[#5E6278]">
+            <Package className="mx-auto mb-2 h-8 w-8 text-[#94a3b8]" />
+            <p className="text-sm font-medium">Nenhum frete ativo</p>
+            <p className="mt-1 text-xs">Os fretes aparecerão aqui quando você aceitar ofertas.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold uppercase text-[#5E6278]">
+                  <th className="px-6 py-3">Origem</th>
+                  <th className="px-6 py-3">Destino</th>
+                  <th className="px-6 py-3">Valor</th>
+                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3">Data</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[#e2e8f0]">
+                {data.recentFreights.map((f) => (
+                  <tr key={f.id} className="transition-colors hover:bg-[#f8fafc]">
+                    <td className="px-6 py-4 font-medium text-[#0F111A]">{f.origin}</td>
+                    <td className="px-6 py-4 text-[#5E6278]">{f.destination}</td>
+                    <td className="px-6 py-4 font-medium text-[#0F111A]">
+                      {formatCurrency(f.value)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <OrderStatusBadge status={f.status} />
+                    </td>
+                    <td className="px-6 py-4 text-[#5E6278]">{f.date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+/* ─── KPI Card ───────────────────────────────────────────── */
 
 function KpiCard({
   label,
@@ -207,7 +340,7 @@ function KpiCard({
 }) {
   return (
     <div className="rounded-2xl border border-[#e2e8f0] bg-white p-5 transition-all hover:shadow-md">
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${bgColor}`}>
           <Icon className="h-5 w-5" style={{ color }} />
         </div>
@@ -217,6 +350,8 @@ function KpiCard({
     </div>
   );
 }
+
+/* ─── Action Card ────────────────────────────────────────── */
 
 function ActionCard({
   icon: Icon,

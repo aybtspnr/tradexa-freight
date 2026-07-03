@@ -204,10 +204,21 @@ export function Motoristas() {
               {motoristas.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center gap-2 text-[#5E6278]">
-                      <Users className="h-8 w-8 text-[#94a3b8]" />
-                      <p className="text-sm font-medium">Nenhum motorista cadastrado</p>
-                      <p className="text-xs">Clique em "Novo Motorista" para começar.</p>
+                    <div className="flex flex-col items-center gap-3 text-[#5E6278]">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-pink-50">
+                        <Users className="h-8 w-8 text-[#ec4899]" />
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-[#0F111A]">Nenhum motorista cadastrado</p>
+                        <p className="mt-1 text-sm text-[#5E6278]">Cadastre motoristas para associá-los às suas rotas e veículos.</p>
+                      </div>
+                      <button
+                        onClick={openNew}
+                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#1d4ed8] shadow-sm"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Cadastrar Primeiro Motorista
+                      </button>
                     </div>
                   </td>
                 </tr>

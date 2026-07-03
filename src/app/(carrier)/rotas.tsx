@@ -188,10 +188,21 @@ export function Rotas() {
               {rotas.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center gap-2 text-[#5E6278]">
-                      <MapPin className="h-8 w-8 text-[#94a3b8]" />
-                      <p className="text-sm font-medium">Nenhuma rota cadastrada</p>
-                      <p className="text-xs">Clique em "Nova Rota" para começar.</p>
+                    <div className="flex flex-col items-center gap-3 text-[#5E6278]">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+                        <MapPin className="h-8 w-8 text-[#2563eb]" />
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-[#0F111A]">Nenhuma rota cadastrada</p>
+                        <p className="mt-1 text-sm text-[#5E6278]">Cadastre sua primeira rota para começar a receber fretes.</p>
+                      </div>
+                      <button
+                        onClick={() => setModalOpen(true)}
+                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#1d4ed8] shadow-sm"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Cadastrar Primeira Rota
+                      </button>
                     </div>
                   </td>
                 </tr>

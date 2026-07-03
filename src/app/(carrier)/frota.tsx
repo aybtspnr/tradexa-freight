@@ -275,10 +275,21 @@ export function Frota() {
               {veiculos.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center gap-2 text-[#5E6278]">
-                      <Truck className="h-8 w-8 text-[#94a3b8]" />
-                      <p className="text-sm font-medium">Nenhum veículo cadastrado</p>
-                      <p className="text-xs">Clique em "Novo Veículo" para começar.</p>
+                    <div className="flex flex-col items-center gap-3 text-[#5E6278]">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-sky-50">
+                        <Truck className="h-8 w-8 text-[#0ea5e9]" />
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-[#0F111A]">Nenhum veículo cadastrado</p>
+                        <p className="mt-1 text-sm text-[#5E6278]">Adicione veículos à sua frota para gerenciar suas operações.</p>
+                      </div>
+                      <button
+                        onClick={openNew}
+                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#1d4ed8] shadow-sm"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Cadastrar Primeiro Veículo
+                      </button>
                     </div>
                   </td>
                 </tr>

@@ -1,5 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/lib/supabase/client";
+import { useAuthStore } from "@/stores/authStore";
+import { formatCurrency, formatDate } from "@/utils/format";
+import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 
 /* ─── Types ───────────────────────────────────────────────── */
 
@@ -8,36 +12,137 @@ interface Cotacao {
   origem: string;
   destino: string;
   data: string;
-  status: "aberta" | "encerrada";
+  status: string;
   ofertas: number;
 }
 
-/* ─── Mock data ──────────────────────────────────────────── */
-
-const MOCK_COTACOES: Cotacao[] = [
-  { id: "1", origem: "São Paulo, SP", destino: "Rio de Janeiro, RJ", data: "18/06/2026", status: "aberta", ofertas: 3 },
-  { id: "2", origem: "Belo Horizonte, MG", destino: "Vitória, ES", data: "17/06/2026", status: "aberta", ofertas: 2 },
-  { id: "3", origem: "Curitiba, PR", destino: "Florianópolis, SC", data: "15/06/2026", status: "encerrada", ofertas: 5 },
-  { id: "4", origem: "Brasília, DF", destino: "Goiânia, GO", data: "14/06/2026", status: "encerrada", ofertas: 4 },
-  { id: "5", origem: "Salvador, BA", destino: "Recife, PE", data: "12/06/2026", status: "aberta", ofertas: 1 },
-];
-
-const STATUS_COLORS: Record<string, string> = {
-  aberta: "bg-blue-100 text-blue-700",
-  encerrada: "bg-gray-100 text-gray-600",
-};
+interface DashboardData {
+  cotacoesAtivas: number;
+  fretesAndamento: number;
+  economiaTotal: number;
+  recentes: Cotacao[];
+  loading: boolean;
+  error: string | null;
+}
 
 /* ─── Component ──────────────────────────────────────────── */
 
 export function Dashboard() {
-  const kpis = useMemo(() => {
-    const abertas = MOCK_COTACOES.filter((c) => c.status === "aberta").length;
-    const fretesAndamento = 4;
-    const economia = 1250;
-    return { cotacoesAtivas: abertas, fretesAndamento, economia };
-  }, []);
+  const profile = useAuthStore((s) => s.profile);
+  const [data, setData] = useState<DashboardData>({
+    cotacoesAtivas: 0,
+    fretesAndamento: 0,
+    economiaTotal: 0,
+    recentes: [],
+    loading: true,
+    error: null,
+  });
 
-  const recentes = useMemo(() => MOCK_COTACOES.slice(0, 3), []);
+  useEffect(() => {
+    if (!profile?.id) {
+      setData((prev) => ({ ...prev, loading: false }));
+      return;
+    }
+
+    const fetchDashboard = async () => {
+      try {
+        // Fetch quotations
+        const { data: cotacoes, error: err1 } = await (supabase as any)
+          .from("quotations")
+          .select("*")
+          .eq("shipper_id", profile.id)
+          .order("created_at", { ascending: false });
+
+        if (err1) throw err1;
+
+        // Fetch orders
+        const { data: fretes, error: err2 } = await (supabase as any)
+          .from("orders")
+          .select("*")
+          .eq("shipper_id", profile.id);
+
+        if (err2) throw err2;
+
+        // Calculate KPIs
+        const cotacoesAtivas =
+          ((cotacoes || []) as any[]).filter(
+            (c: any) => c.status === "open" || c.status === "bidding",
+          ).length;
+
+        const fretesAndamento =
+          ((fretes || []) as any[]).filter(
+            (f: any) =>
+              f.status === "confirmed" ||
+              f.status === "picked_up" ||
+              f.status === "in_transit",
+          ).length;
+
+        // Economy estimated as 15% of total delivered freight value (mock calculation)
+        const totalGasto =
+          ((fretes || []) as any[]).reduce(
+            (sum: number, f: any) => sum + Number(f.price || 0),
+            0,
+          );
+        const economiaTotal = Math.round(totalGasto * 0.15);
+
+        // Recent quotations (top 5)
+        const recentes: Cotacao[] = ((cotacoes || []) as any[])
+          .slice(0, 5)
+          .map((c: any) => ({
+            id: c.id,
+            origem: `${c.origin_city || ""}, ${c.origin_state || ""}`,
+            destino: `${c.destination_city || ""}, ${c.destination_state || ""}`,
+            data: formatDate(c.created_at),
+            status: c.status === "open" ? "aberta" : c.status === "bidding" ? "com_ofertas" : "fechada",
+            ofertas: 0,
+          }));
+
+        setData({
+          cotacoesAtivas,
+          fretesAndamento,
+          economiaTotal,
+          recentes,
+          loading: false,
+          error: null,
+        });
+      } catch (err: any) {
+        console.error("Dashboard error:", err);
+        setData((prev) => ({
+          ...prev,
+          loading: false,
+          error: err.message || "Erro ao carregar dashboard",
+        }));
+      }
+    };
+
+    fetchDashboard();
+  }, [profile?.id]);
+
+  /* ─── Loading state ─────────────────────────────── */
+
+  if (data.loading) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── Error state ───────────────────────────────── */
+
+  if (data.error) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+          <p className="text-red-700">{data.error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── Render ────────────────────────────────────── */
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -51,19 +156,19 @@ export function Dashboard() {
       <div className="grid gap-6 sm:grid-cols-3">
         <KpiCard
           label="Cotações Ativas"
-          value={kpis.cotacoesAtivas.toString()}
+          value={data.cotacoesAtivas.toString()}
           icon="💰"
           color="bg-blue-500"
         />
         <KpiCard
           label="Fretes em Andamento"
-          value={kpis.fretesAndamento.toString()}
+          value={data.fretesAndamento.toString()}
           icon="📦"
           color="bg-amber-500"
         />
         <KpiCard
           label="Economia Estimada"
-          value={`R$ ${kpis.economia.toLocaleString("pt-BR")}`}
+          value={formatCurrency(data.economiaTotal)}
           icon="📉"
           color="bg-green-500"
         />
@@ -72,7 +177,7 @@ export function Dashboard() {
       {/* Quick actions */}
       <div>
         <Link
-          to="/shipper/cotacoes"
+          to="/shipper/cotar"
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-dark"
         >
           ＋ Nova Cotação
@@ -90,38 +195,45 @@ export function Dashboard() {
             Ver todas →
           </Link>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-gray-50 text-xs font-semibold uppercase text-gray-500">
-                <th className="px-6 py-3">Origem</th>
-                <th className="px-6 py-3">Destino</th>
-                <th className="px-6 py-3">Data</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Ofertas</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {recentes.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-900">{c.origem}</td>
-                  <td className="px-6 py-4 text-gray-700">{c.destino}</td>
-                  <td className="px-6 py-4 text-gray-500">{c.data}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        STATUS_COLORS[c.status]
-                      }`}
-                    >
-                      {c.status === "aberta" ? "Aberta" : "Encerrada"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-900">{c.ofertas} ofertas</td>
+
+        {data.recentes.length === 0 ? (
+          <div className="px-6 py-12 text-center text-gray-400">
+            <p className="text-sm">Nenhuma cotação criada ainda.</p>
+            <Link
+              to="/shipper/cotar"
+              className="mt-2 inline-block text-sm font-medium text-primary hover:text-primary-dark"
+            >
+              Criar primeira cotação →
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border bg-gray-50 text-xs font-semibold uppercase text-gray-500">
+                  <th className="px-6 py-3">Origem</th>
+                  <th className="px-6 py-3">Destino</th>
+                  <th className="px-6 py-3">Data</th>
+                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3">Ofertas</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {data.recentes.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 font-medium text-gray-900">{c.origem}</td>
+                    <td className="px-6 py-4 text-gray-700">{c.destino}</td>
+                    <td className="px-6 py-4 text-gray-500">{c.data}</td>
+                    <td className="px-6 py-4">
+                      <OrderStatusBadge status={c.status} />
+                    </td>
+                    <td className="px-6 py-4 text-gray-900">{c.ofertas} ofertas</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

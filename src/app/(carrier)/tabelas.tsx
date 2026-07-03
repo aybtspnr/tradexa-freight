@@ -236,8 +236,22 @@ export function Tabelas() {
             <tbody className="divide-y divide-border">
               {tabelas.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
-                    Nenhuma tabela cadastrada.
+                  <td colSpan={8} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3 text-gray-500">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-50">
+                        <span className="text-3xl">📊</span>
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-gray-900">Nenhuma tabela de frete cadastrada</p>
+                        <p className="mt-1 text-sm text-gray-500">Crie tabelas de preço para automatizar suas cotações por rota.</p>
+                      </div>
+                      <button
+                        onClick={openNew}
+                        className="mt-2 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-dark shadow-sm"
+                      >
+                        ＋ Criar Primeira Tabela
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}

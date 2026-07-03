@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { supabase } from "@/lib/supabase/client";
+import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
+import { formatCurrency, formatDate, formatWeight, formatVolume } from "@/utils/format";
 
 /* ─── Types ───────────────────────────────────────────────── */
 
@@ -43,28 +45,6 @@ const DB_TO_UI_STATUS: Record<string, string> = {
   cancelled: "cancelado",
 };
 
-function formatDateTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("pt-BR");
-  } catch {
-    return iso;
-  }
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  ativo: "bg-blue-100 text-blue-700",
-  em_andamento: "bg-yellow-100 text-yellow-700",
-  entregue: "bg-green-100 text-green-700",
-  cancelado: "bg-red-100 text-red-700",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  ativo: "Ativo",
-  em_andamento: "Em Andamento",
-  entregue: "Entregue",
-  cancelado: "Cancelado",
-};
-
 const FILTROS: { value: FiltroStatus; label: string }[] = [
   { value: "todos", label: "Todos" },
   { value: "ativo", label: "Ativos" },
@@ -79,15 +59,18 @@ export function Fretes() {
   const profile = useAuthStore((s) => s.profile);
   const [filtro, setFiltro] = useState<FiltroStatus>("todos");
   const [orders, setOrders] = useState<FreightOrder[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const carrierId = profile?.id;
 
   const loadOrders = useCallback(async () => {
     if (!carrierId) {
       setOrders([]);
+      setLoading(false);
       return;
     }
 
+    setLoading(true);
     // Load orders with the related quotation data via a join
     const { data, error } = await (supabase.from("orders") as any)
       .select("*, quotation:quotation_id(*)")
@@ -96,6 +79,7 @@ export function Fretes() {
 
     if (error) {
       console.error("Erro ao carregar fretes:", error);
+      setLoading(false);
       return;
     }
 
@@ -124,17 +108,16 @@ export function Fretes() {
         };
       }),
     );
+    setLoading(false);
   }, [carrierId, profile?.name]);
 
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
 
-  const allOrders = useMemo(() => orders, [orders]);
-
   const filtered = useMemo(
-    () => allOrders.filter((o) => filtro === "todos" || o.status === filtro),
-    [allOrders, filtro],
+    () => orders.filter((o) => filtro === "todos" || o.status === filtro),
+    [orders, filtro],
   );
 
   const total = useMemo(
@@ -162,6 +145,20 @@ export function Fretes() {
     [],
   );
 
+  /* ─── Loading state ────────────────────────────── */
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-7xl">
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── Render ───────────────────────────────────── */
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
@@ -176,7 +173,7 @@ export function Fretes() {
           {filtered.length} frete{filtered.length !== 1 ? "s" : ""} encontrado{filtered.length !== 1 ? "s" : ""}
         </span>
         <span className="text-lg font-bold text-gray-900">
-          Total: R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          Total: {formatCurrency(total)}
         </span>
       </div>
 
@@ -197,88 +194,101 @@ export function Fretes() {
         ))}
       </div>
 
-      {/* Cards */}
-      {filtered.length === 0 && (
-        <div className="rounded-xl border border-border bg-white py-16 text-center text-gray-400">
-          Nenhum frete encontrado.
+      {/* Empty state */}
+      {orders.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-white px-6 py-16 shadow-sm">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-50">
+            <span className="text-3xl">🚚</span>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">Nenhum frete contratado ainda</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Os fretes aparecerão aqui quando embarcadores aceitarem suas ofertas.
+          </p>
+          <div className="mt-6 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+            <p className="font-medium">💡 Continue fazendo ofertas nas cotações disponíveis!</p>
+          </div>
         </div>
       )}
 
-      <div className="space-y-3">
-        {filtered.map((o) => (
-          <div
-            key={o.id}
-            className="rounded-xl border border-border bg-white p-5 transition-shadow hover:shadow-sm"
-          >
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              {/* Left info */}
-              <div className="flex-1">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                  <span className="text-gray-500">Cliente:</span>
-                  <span>{o.carrier_nome}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-2 text-sm text-gray-700">
-                  <span>{o.origem_cidade}/{o.origem_estado}</span>
-                  <span className="text-gray-400">→</span>
-                  <span>{o.destino_cidade}/{o.destino_estado}</span>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 line-clamp-1">{o.carga_descricao}</p>
-                <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
-                  <span>{o.peso_kg} kg</span>
-                  <span>{o.volume_m3} m³</span>
-                  <span>{o.prazo_dias} dias úteis</span>
-                  <span>Criado: {formatDateTime(o.created_at)}</span>
-                </div>
-              </div>
+      {/* Empty filter result */}
+      {orders.length > 0 && filtered.length === 0 && (
+        <div className="rounded-xl border border-border bg-white py-12 text-center text-gray-400">
+          Nenhum frete encontrado para este filtro.
+        </div>
+      )}
 
-              {/* Right info */}
-              <div className="flex flex-col items-end gap-2">
-                <span className="text-xl font-bold text-green-700">
-                  R$ {o.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </span>
-                <span
-                  className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${
-                    STATUS_COLORS[o.status]
-                  }`}
-                >
-                  {STATUS_LABELS[o.status]}
-                </span>
+      {/* Cards */}
+      {filtered.length > 0 && (
+        <div className="space-y-3">
+          {filtered.map((o) => (
+            <div
+              key={o.id}
+              className="rounded-xl border border-border bg-white p-5 transition-shadow hover:shadow-sm"
+            >
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                {/* Left info */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                    <span className="text-gray-500">Cliente:</span>
+                    <span>{o.carrier_nome}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-sm text-gray-700">
+                    <span>{o.origem_cidade}/{o.origem_estado}</span>
+                    <span className="text-gray-400">→</span>
+                    <span>{o.destino_cidade}/{o.destino_estado}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 line-clamp-1">{o.carga_descricao}</p>
+                  <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+                    <span>{formatWeight(o.peso_kg)}</span>
+                    <span>{formatVolume(o.volume_m3)}</span>
+                    <span>{o.prazo_dias} dias úteis</span>
+                    <span>Criado: {formatDate(o.created_at)}</span>
+                  </div>
+                </div>
 
-                {/* Status actions */}
-                <div className="mt-1 flex gap-1">
-                  {o.status === "ativo" && (
-                    <button
-                      onClick={() => handleUpdateStatus(o.id, "em_andamento")}
-                      className="rounded-md border border-yellow-300 px-2.5 py-1 text-xs font-medium text-yellow-700 transition-colors hover:bg-yellow-50"
-                    >
-                      Iniciar
-                    </button>
-                  )}
-                  {o.status === "em_andamento" && (
-                    <button
-                      onClick={() => handleUpdateStatus(o.id, "entregue")}
-                      className="rounded-md border border-green-300 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-50"
-                    >
-                      Finalizar
-                    </button>
-                  )}
-                  {(o.status === "ativo" || o.status === "em_andamento") && (
-                    <button
-                      onClick={() => {
-                        if (window.confirm("Cancelar este frete?"))
-                          handleUpdateStatus(o.id, "cancelado");
-                      }}
-                      className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
-                    >
-                      Cancelar
-                    </button>
-                  )}
+                {/* Right info */}
+                <div className="flex flex-col items-end gap-2">
+                  <span className="text-xl font-bold text-green-700">
+                    {formatCurrency(o.valor)}
+                  </span>
+                  <OrderStatusBadge status={o.status} />
+
+                  {/* Status actions */}
+                  <div className="mt-1 flex gap-1">
+                    {o.status === "ativo" && (
+                      <button
+                        onClick={() => handleUpdateStatus(o.id, "em_andamento")}
+                        className="rounded-md border border-yellow-300 px-2.5 py-1 text-xs font-medium text-yellow-700 transition-colors hover:bg-yellow-50"
+                      >
+                        Iniciar
+                      </button>
+                    )}
+                    {o.status === "em_andamento" && (
+                      <button
+                        onClick={() => handleUpdateStatus(o.id, "entregue")}
+                        className="rounded-md border border-green-300 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-50"
+                      >
+                        Finalizar
+                      </button>
+                    )}
+                    {(o.status === "ativo" || o.status === "em_andamento") && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm("Cancelar este frete?"))
+                            handleUpdateStatus(o.id, "cancelado");
+                        }}
+                        className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
