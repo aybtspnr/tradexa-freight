@@ -9,7 +9,7 @@ const MAINTENANCE = import.meta.env.VITE_MAINTENANCE_MODE === "true";
 
 interface AuthGuardProps {
   children: ReactNode;
-  requiredRole?: "carrier" | "shipper";
+  requiredRole?: "carrier" | "shipper" | "admin";
 }
 
 export function AuthGuard({ children, requiredRole }: AuthGuardProps) {

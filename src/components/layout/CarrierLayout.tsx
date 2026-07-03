@@ -2,7 +2,8 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import {
   LayoutDashboard, MapPin, Table, Truck, Users,
-  DollarSign, Package, FileText, Settings, LogOut,
+  DollarSign, Package, FileText, Bell, BarChart3,
+  Share2, FileSignature, Link2, Settings, LogOut,
   ChevronDown,
 } from "lucide-react";
 
@@ -14,8 +15,12 @@ const sidebarLinks = [
   { to: "/carrier/motoristas", label: "Motoristas", icon: Users },
   { to: "/carrier/cotacoes", label: "Cotações", icon: DollarSign },
   { to: "/carrier/fretes", label: "Fretes", icon: Package },
+  { to: "/carrier/contratos", label: "Contratos", icon: FileSignature },
+  { to: "/carrier/notificacoes", label: "Notificações", icon: Bell },
+  { to: "/carrier/relatorios", label: "Relatórios", icon: BarChart3 },
+  { to: "/carrier/indicar", label: "Indicar", icon: Share2 },
+  { to: "/carrier/integracoes", label: "Integrações", icon: Link2 },
   { to: "/carrier/documentos", label: "Documentos", icon: FileText },
-  { to: "/carrier/financeiro", label: "Financeiro", icon: DollarSign },
   { to: "/carrier/config", label: "Configurações", icon: Settings },
 ];
 
@@ -93,6 +98,7 @@ export function CarrierLayout() {
         {/* Top header */}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-4 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-xl px-6">
           <div className="flex items-center gap-2 text-sm text-[#5E6278]">
+            <LanguageSwitcher />
             <span>TradeXa Fretes</span>
             <ChevronDown className="h-3 w-3" />
           </div>
@@ -104,5 +110,21 @@ export function CarrierLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+function LanguageSwitcher() {
+  return (
+    <select
+      className="rounded-lg border border-[#e2e8f0] bg-white px-2 py-1 text-xs font-medium text-[#5E6278] outline-none"
+      defaultValue="pt"
+      onChange={(e) => {
+        document.documentElement.lang = e.target.value;
+      }}
+    >
+      <option value="pt">🇧🇷 PT</option>
+      <option value="en">🇺🇸 EN</option>
+      <option value="es">🇪🇸 ES</option>
+    </select>
   );
 }

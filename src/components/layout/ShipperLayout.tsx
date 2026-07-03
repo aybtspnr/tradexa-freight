@@ -1,14 +1,22 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import {
-  LayoutDashboard, DollarSign, Package, LogOut,
-  ChevronDown,
+  LayoutDashboard, DollarSign, Package, Plus,
+  Bell, BarChart3, Share2, FileSignature,
+  Link2, Settings, LogOut, ChevronDown,
 } from "lucide-react";
 
 const sidebarLinks = [
   { to: "/shipper", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/shipper/cotar", label: "Nova Cotação", icon: Plus },
   { to: "/shipper/cotacoes", label: "Cotações", icon: DollarSign },
   { to: "/shipper/fretes", label: "Fretes", icon: Package },
+  { to: "/shipper/contratos", label: "Contratos", icon: FileSignature },
+  { to: "/shipper/notificacoes", label: "Notificações", icon: Bell },
+  { to: "/shipper/relatorios", label: "Relatórios", icon: BarChart3 },
+  { to: "/shipper/indicar", label: "Indicar", icon: Share2 },
+  { to: "/shipper/integracoes", label: "Integrações", icon: Link2 },
+  { to: "/shipper/config", label: "Configurações", icon: Settings },
 ];
 
 export function ShipperLayout() {
@@ -27,7 +35,7 @@ export function ShipperLayout() {
       <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-[#0F111A] text-white">
         <div className="flex h-16 items-center gap-3 border-b border-white/[0.06] px-6">
           <img
-            src="/logo-fretes.png"
+            src="/logo-fretes.jpg"
             alt="TradeXa Fretes"
             width={74}
             height={32}
@@ -83,6 +91,7 @@ export function ShipperLayout() {
       <div className="ml-64 flex flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-4 border-b border-[#e2e8f0] bg-white/80 backdrop-blur-xl px-6">
           <div className="flex items-center gap-2 text-sm text-[#5E6278]">
+            <LanguageSwitcher />
             <span>TradeXa Fretes</span>
             <ChevronDown className="h-3 w-3" />
           </div>
@@ -93,5 +102,21 @@ export function ShipperLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+function LanguageSwitcher() {
+  return (
+    <select
+      className="rounded-lg border border-[#e2e8f0] bg-white px-2 py-1 text-xs font-medium text-[#5E6278] outline-none"
+      defaultValue="pt"
+      onChange={(e) => {
+        document.documentElement.lang = e.target.value;
+      }}
+    >
+      <option value="pt">🇧🇷 PT</option>
+      <option value="en">🇺🇸 EN</option>
+      <option value="es">🇪🇸 ES</option>
+    </select>
   );
 }

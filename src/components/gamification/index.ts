@@ -1,0 +1,1 @@
+export { GamificationBadge } from "./GamificationBadge";
