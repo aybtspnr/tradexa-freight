@@ -1,8 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-const db: any = supabase;
-
 interface Props {
   shipperId: string;
   onClose: () => void;
@@ -41,7 +39,7 @@ export function NovoContratoModal({ shipperId, onClose, onCreated }: Props) {
     setSearching(true);
     setError("");
 
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("profiles")
       .select("id, name, email")
       .eq("role", "carrier")
@@ -68,7 +66,7 @@ export function NovoContratoModal({ shipperId, onClose, onCreated }: Props) {
     setLoading(true);
     setError("");
 
-    const { error: insertError } = await db.from("contracts").insert({
+    const { error: insertError } = await supabase.from("contracts").insert({
       shipper_id: shipperId,
       carrier_id: carrierId,
       origin_city: originCity,

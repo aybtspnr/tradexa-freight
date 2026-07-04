@@ -1,8 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-const db: any = supabase;
-
 interface RouteResult {
   carrierName: string;
   price: number;
@@ -90,7 +88,7 @@ export function FreightCalculator() {
   async function handleLeadCapture() {
     if (!email) return;
     // Save lead to Supabase (anon insert)
-    await db.from("leads").insert({
+    await (supabase as any).from("leads").insert({
       email,
       origin: `${originCity}/${originState}`,
       destination: `${destCity}/${destState}`,

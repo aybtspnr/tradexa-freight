@@ -1,42 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Users, Pencil, Trash2, X, Calendar } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Phone, Mail, FileText, IdCard } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
+import type { Driver } from "@/types";
 
-type StatusMotorista = "disponivel" | "em_viagem" | "descanso" | "inativo";
-
-interface Motorista {
-  id: string;
-  nome: string;
-  cpf: string;
-  cnh: string;
-  validade_cnh: string;
-  telefone: string;
-  email: string;
-  status: StatusMotorista;
-}
-
-const STATUS_OPTS: { value: StatusMotorista; label: string }[] = [
-  { value: "disponivel", label: "Disponível" },
-  { value: "em_viagem", label: "Em Viagem" },
-  { value: "descanso", label: "Descanso" },
-  { value: "inativo", label: "Inativo" },
-];
-
-const STATUS_STYLES: Record<string, string> = {
-  disponivel: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  em_viagem: "bg-blue-50 text-blue-700 border-blue-200",
-  descanso: "bg-amber-50 text-amber-700 border-amber-200",
-  inativo: "bg-red-50 text-red-700 border-red-200",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  disponivel: "Disponível",
-  em_viagem: "Em Viagem",
-  descanso: "Descanso",
-  inativo: "Inativo",
-};
-
+/* ─── Formatar CPF: 000.000.000-00 ─── */
 function formatCPF(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 3) return digits;
@@ -45,6 +13,7 @@ function formatCPF(value: string): string {
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
+/* ─── Formatar Telefone: (XX) XXXXX-XXXX ─── */
 function formatPhone(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return `(${digits}`;
@@ -52,114 +21,130 @@ function formatPhone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
-const EMPTY_FORM = {
-  nome: "",
+/* ─── Formulário vazio ─── */
+interface FormState {
+  name: string;
+  cpf: string;
+  cnh_number: string;
+  cnh_expiry: string;
+  phone: string;
+  email: string;
+  active: boolean;
+}
+
+const EMPTY_FORM: FormState = {
+  name: "",
   cpf: "",
-  cnh: "",
-  validade_cnh: "",
-  telefone: "",
+  cnh_number: "",
+  cnh_expiry: "",
+  phone: "",
   email: "",
-  status: "disponivel" as StatusMotorista,
+  active: true,
 };
 
 export function Motoristas() {
   const profile = useAuthStore((s) => s.profile);
-  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
+  const [motoristas, setMotoristas] = useState<Driver[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
+  /* ─── Carregar motoristas do Supabase ─── */
   const loadMotoristas = useCallback(async () => {
     if (!profile?.id) {
       setMotoristas([]);
       return;
     }
-    const { data, error } = await (supabase.from("drivers") as any)
+    const { data, error } = await supabase
+      .from("drivers")
       .select("*")
       .eq("carrier_id", profile.id)
       .order("created_at", { ascending: false });
+
     if (error) {
       console.error("Erro ao carregar motoristas:", error);
       return;
     }
-    setMotoristas(
-      ((data || []) as any[]).map((d: any) => ({
-        id: d.id,
-        nome: d.name,
-        cpf: d.cpf,
-        cnh: d.cnh_number,
-        validade_cnh: d.cnh_expiry || "",
-        telefone: d.phone || "",
-        email: d.email || "",
-        status: d.active ? ("disponivel" as StatusMotorista) : ("inativo" as StatusMotorista),
-      })),
-    );
+    setMotoristas(data ?? []);
   }, [profile?.id]);
 
   useEffect(() => {
     loadMotoristas();
   }, [loadMotoristas]);
 
+  /* ─── Abrir modal para novo ─── */
   const openNew = useCallback(() => {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setModalOpen(true);
   }, []);
 
-  const openEdit = useCallback((m: Motorista) => {
-    setEditingId(m.id);
+  /* ─── Abrir modal para edição ─── */
+  const openEdit = useCallback((d: Driver) => {
+    setEditingId(d.id);
     setForm({
-      nome: m.nome,
-      cpf: m.cpf,
-      cnh: m.cnh,
-      validade_cnh: m.validade_cnh,
-      telefone: m.telefone,
-      email: m.email,
-      status: m.status,
+      name: d.name,
+      cpf: d.cpf ?? "",
+      cnh_number: d.cnh_number ?? "",
+      cnh_expiry: d.cnh_expiry ?? "",
+      phone: d.phone ?? "",
+      email: d.email ?? "",
+      active: d.active ?? true,
     });
     setModalOpen(true);
   }, []);
 
+  /* ─── Salvar (criar ou atualizar) ─── */
   const handleSave = useCallback(async () => {
     if (!profile?.id) return;
-    if (!form.nome || !form.cpf || !form.cnh) return;
+    if (!form.name || !form.cpf || !form.cnh_number) return;
     if (form.cpf.replace(/\D/g, "").length !== 11) return;
 
-    const record: any = {
+    setSaving(true);
+
+    const record = {
       carrier_id: profile.id,
-      name: form.nome,
+      name: form.name,
       cpf: form.cpf,
-      cnh_number: form.cnh,
-      cnh_expiry: form.validade_cnh || null,
-      phone: form.telefone || null,
+      cnh_number: form.cnh_number,
+      cnh_expiry: form.cnh_expiry || null,
+      phone: form.phone || null,
       email: form.email || null,
-      active: form.status !== "inativo",
+      active: form.active,
     };
 
     if (editingId) {
-      const { error } = await (supabase.from("drivers") as any).update(record).eq("id", editingId);
+      const { error } = await supabase
+        .from("drivers")
+        .update(record)
+        .eq("id", editingId);
       if (error) {
         console.error("Erro ao atualizar motorista:", error);
+        setSaving(false);
         return;
       }
     } else {
-      const { error } = await (supabase.from("drivers") as any).insert(record);
+      const { error } = await supabase.from("drivers").insert(record);
       if (error) {
         console.error("Erro ao cadastrar motorista:", error);
+        setSaving(false);
         return;
       }
     }
 
     await loadMotoristas();
+    setSaving(false);
     setModalOpen(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
   }, [form, editingId, profile?.id, loadMotoristas]);
 
+  /* ─── Excluir com confirmação ─── */
   const handleExcluir = useCallback(
     async (id: string) => {
-      if (!window.confirm("Excluir este motorista?")) return;
-      const { error } = await (supabase.from("drivers") as any).delete().eq("id", id);
+      if (!window.confirm("Tem certeza que deseja excluir este motorista? Esta ação não pode ser desfeita.")) return;
+      const { error } = await supabase.from("drivers").delete().eq("id", id);
       if (error) {
         console.error("Erro ao excluir motorista:", error);
         return;
@@ -169,106 +154,136 @@ export function Motoristas() {
     [loadMotoristas],
   );
 
+  /* ─── Formatar data para exibição ─── */
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    const [y, m, d] = dateStr.split("-");
+    return `${d}/${m}/${y}`;
+  };
+
+  const count = motoristas.length;
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <div className="flex items-center justify-between">
+      {/* ─── Header ─── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0F111A]">Motoristas</h1>
-          <p className="text-sm text-[#5E6278]">Gerencie os motoristas cadastrados</p>
+          <p className="text-sm text-[#5E6278]">
+            {count === 0
+              ? "Nenhum motorista cadastrado"
+              : `${count} motorista${count > 1 ? "s" : ""} cadastrado${count > 1 ? "s" : ""}`}
+          </p>
         </div>
         <button
           onClick={openNew}
           className="inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#1d4ed8] shadow-sm"
         >
           <Plus className="h-4 w-4" />
-          Novo Motorista
+          Adicionar Motorista
         </button>
       </div>
 
-      <div className="rounded-2xl border border-[#e2e8f0] bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold uppercase text-[#5E6278]">
-                <th className="px-6 py-3">Nome</th>
-                <th className="px-6 py-3">CPF</th>
-                <th className="px-6 py-3">CNH</th>
-                <th className="px-6 py-3">Validade CNH</th>
-                <th className="px-6 py-3">Telefone</th>
-                <th className="px-6 py-3">Email</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e2e8f0]">
-              {motoristas.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3 text-[#5E6278]">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-pink-50">
-                        <Users className="h-8 w-8 text-[#ec4899]" />
-                      </div>
-                      <div>
-                        <p className="text-base font-semibold text-[#0F111A]">Nenhum motorista cadastrado</p>
-                        <p className="mt-1 text-sm text-[#5E6278]">Cadastre motoristas para associá-los às suas rotas e veículos.</p>
-                      </div>
-                      <button
-                        onClick={openNew}
-                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#1d4ed8] shadow-sm"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Cadastrar Primeiro Motorista
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              {motoristas.map((m) => (
-                <tr key={m.id} className="transition-colors hover:bg-[#f8fafc]">
-                  <td className="px-6 py-4 font-medium text-[#0F111A]">{m.nome}</td>
-                  <td className="px-6 py-4 font-mono text-[#5E6278]">{m.cpf}</td>
-                  <td className="px-6 py-4 font-mono text-[#5E6278]">{m.cnh}</td>
-                  <td className="px-6 py-4 text-[#5E6278]">
-                    <span className="inline-flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {m.validade_cnh || "—"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-[#5E6278]">{m.telefone}</td>
-                  <td className="px-6 py-4 text-[#5E6278]">{m.email || "—"}</td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[m.status]}`}>
-                      {STATUS_LABELS[m.status]}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => openEdit(m)}
-                        className="inline-flex items-center gap-1 rounded-xl border border-[#e2e8f0] px-3 py-1.5 text-xs font-semibold text-[#5E6278] transition-colors hover:bg-gray-50"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleExcluir(m.id)}
-                        className="inline-flex items-center gap-1 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Excluir
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* ─── Grid de Cards ─── */}
+      {count === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-[#e2e8f0] bg-white py-20 shadow-sm">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-pink-50">
+            <IdCard className="h-10 w-10 text-[#ec4899]" />
+          </div>
+          <p className="mt-4 text-base font-semibold text-[#0F111A]">Nenhum motorista cadastrado</p>
+          <p className="mt-1 text-sm text-[#5E6278]">Cadastre motoristas para associá-los às suas rotas e veículos.</p>
         </div>
-      </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {motoristas.map((m) => (
+            <div
+              key={m.id}
+              className="rounded-2xl border border-[#e2e8f0] bg-white p-5 shadow-sm transition-all hover:shadow-md"
+            >
+              {/* ─── Topo: Nome + Status ─── */}
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <h3 className="text-base font-bold text-[#0F111A] leading-tight">{m.name}</h3>
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                    m.active
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-gray-100 text-gray-500 border border-gray-200"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${
+                      m.active ? "bg-emerald-500" : "bg-gray-400"
+                    }`}
+                  />
+                  {m.active ? "Ativo" : "Inativo"}
+                </span>
+              </div>
 
+              {/* ─── Info ─── */}
+              <div className="space-y-2.5 text-sm">
+                {/* CPF */}
+                <div className="flex items-center gap-2 text-[#5E6278]">
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-mono text-xs">{m.cpf || "—"}</span>
+                </div>
+
+                {/* CNH */}
+                <div className="flex items-center gap-2 text-[#5E6278]">
+                  <IdCard className="h-3.5 w-3.5 shrink-0" />
+                  <span className="text-xs">
+                    CNH: {m.cnh_number || "—"}
+                    {m.cnh_expiry && (
+                      <span className="ml-1 text-[#94a3b8]">
+                        (vence {formatDate(m.cnh_expiry)})
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {/* Telefone */}
+                {m.phone && (
+                  <div className="flex items-center gap-2 text-[#5E6278]">
+                    <Phone className="h-3.5 w-3.5 shrink-0" />
+                    <span className="text-xs">{m.phone}</span>
+                  </div>
+                )}
+
+                {/* Email */}
+                {m.email && (
+                  <div className="flex items-center gap-2 text-[#5E6278]">
+                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate text-xs">{m.email}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* ─── Ações ─── */}
+              <div className="mt-4 flex gap-2 border-t border-[#e2e8f0] pt-4">
+                <button
+                  onClick={() => openEdit(m)}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#e2e8f0] px-3 py-2 text-xs font-semibold text-[#5E6278] transition-colors hover:bg-gray-50"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar
+                </button>
+                <button
+                  onClick={() => handleExcluir(m.id)}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ─── Modal ─── */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            {/* Cabeçalho */}
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-[#0F111A]">
                 {editingId ? "Editar Motorista" : "Novo Motorista"}
@@ -280,59 +295,140 @@ export function Motoristas() {
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            {/* Campos */}
             <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+              {/* Nome */}
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">Nome Completo</label>
-                <input type="text" value={form.nome} onChange={(e) => setForm((p) => ({ ...p, nome: e.target.value }))}
+                <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">
+                  Nome Completo <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                   placeholder="Ex: João Silva"
-                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10" />
+                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                />
               </div>
+
+              {/* CPF */}
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">CPF</label>
-                <input type="text" value={form.cpf} onChange={(e) => setForm((p) => ({ ...p, cpf: formatCPF(e.target.value) }))}
-                  placeholder="000.000.000-00" maxLength={14}
-                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm font-mono text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10" />
+                <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">
+                  CPF <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.cpf}
+                  onChange={(e) => setForm((p) => ({ ...p, cpf: formatCPF(e.target.value) }))}
+                  placeholder="000.000.000-00"
+                  maxLength={14}
+                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 font-mono text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                />
               </div>
+
+              {/* CNH + Validade */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">CNH</label>
-                  <input type="text" value={form.cnh} onChange={(e) => setForm((p) => ({ ...p, cnh: e.target.value }))}
+                  <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">
+                    Nº CNH <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.cnh_number}
+                    onChange={(e) => setForm((p) => ({ ...p, cnh_number: e.target.value }))}
                     placeholder="Número da CNH"
-                    className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10" />
+                    className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                  />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">Validade CNH</label>
-                  <input type="date" value={form.validade_cnh} onChange={(e) => setForm((p) => ({ ...p, validade_cnh: e.target.value }))}
-                    className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10" />
+                  <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">
+                    Validade CNH
+                  </label>
+                  <input
+                    type="date"
+                    value={form.cnh_expiry}
+                    onChange={(e) => setForm((p) => ({ ...p, cnh_expiry: e.target.value }))}
+                    className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                  />
                 </div>
               </div>
+
+              {/* Telefone */}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">Telefone</label>
-                <input type="text" value={form.telefone} onChange={(e) => setForm((p) => ({ ...p, telefone: formatPhone(e.target.value) }))}
-                  placeholder="(11) 99999-8888" maxLength={16}
-                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10" />
+                <input
+                  type="text"
+                  value={form.phone}
+                  onChange={(e) => setForm((p) => ({ ...p, phone: formatPhone(e.target.value) }))}
+                  placeholder="(11) 99999-8888"
+                  maxLength={16}
+                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                />
               </div>
+
+              {/* Email */}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">Email</label>
-                <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
                   placeholder="motorista@exemplo.com"
-                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10" />
+                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                />
               </div>
+
+              {/* Status (ativo/inativo) */}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-[#0F111A]">Status</label>
-                <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as StatusMotorista }))}
-                  className="w-full rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm text-[#0F111A] outline-none transition-all focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10">
-                  {STATUS_OPTS.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
-                </select>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, active: true }))}
+                    className={`flex-1 rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-all ${
+                      form.active
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        : "border-[#e2e8f0] text-[#5E6278] hover:bg-gray-50"
+                    }`}
+                  >
+                    ✓ Ativo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, active: false }))}
+                    className={`flex-1 rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-all ${
+                      !form.active
+                        ? "border-gray-400 bg-gray-100 text-gray-600"
+                        : "border-[#e2e8f0] text-[#5E6278] hover:bg-gray-50"
+                    }`}
+                  >
+                    ✕ Inativo
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Rodapé */}
             <div className="mt-6 flex justify-end gap-3 border-t border-[#e2e8f0] pt-4">
-              <button onClick={() => setModalOpen(false)}
-                className="rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm font-semibold text-[#5E6278] transition-colors hover:bg-gray-50">Cancelar</button>
-              <button onClick={handleSave}
-                disabled={!form.nome || form.cpf.replace(/\D/g, "").length !== 11 || !form.cnh}
-                className="rounded-xl bg-gradient-to-r from-[#2563eb] to-[#3b82f6] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:from-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50 shadow-sm">
-                {editingId ? "Salvar Alterações" : "Cadastrar Motorista"}</button>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="rounded-xl border-2 border-[#e2e8f0] px-4 py-2.5 text-sm font-semibold text-[#5E6278] transition-colors hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={
+                  saving ||
+                  !form.name ||
+                  form.cpf.replace(/\D/g, "").length !== 11 ||
+                  !form.cnh_number
+                }
+                className="rounded-xl bg-gradient-to-r from-[#2563eb] to-[#3b82f6] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:from-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+              >
+                {saving ? "Salvando..." : editingId ? "Salvar Alterações" : "Cadastrar Motorista"}
+              </button>
             </div>
           </div>
         </div>

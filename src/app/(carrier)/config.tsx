@@ -13,7 +13,7 @@ export function Config() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    (supabase as any).auth.getSession().then(({ data: { session } }: any) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) loadProfile(u.id);
@@ -29,7 +29,7 @@ export function Config() {
   }, [profile]);
 
   async function loadProfile(userId: string) {
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
@@ -50,7 +50,7 @@ export function Config() {
 
     const payload = { name, phone, role };
 
-    await (supabase as any)
+    await supabase
       .from("profiles")
       .update(payload)
       .eq("id", user.id);

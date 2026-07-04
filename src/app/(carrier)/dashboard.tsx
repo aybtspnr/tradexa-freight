@@ -57,7 +57,7 @@ export function Dashboard() {
     const fetchDashboard = async () => {
       try {
         // Load orders for this carrier
-        const { data: fretes, error: err1 } = await (supabase as any)
+        const { data: fretes, error: err1 } = await supabase
           .from("orders")
           .select("*, quotation:quotation_id(*)")
           .eq("carrier_id", profile.id)
@@ -66,7 +66,7 @@ export function Dashboard() {
         if (err1) throw err1;
 
         // Load fleet
-        const { data: frota, error: err3 } = await (supabase as any)
+        const { data: frota, error: err3 } = await supabase
           .from("fleet")
           .select("*")
           .eq("carrier_id", profile.id);
@@ -74,7 +74,7 @@ export function Dashboard() {
         if (err3) throw err3;
 
         // Load drivers
-        const { data: motoristas, error: err4 } = await (supabase as any)
+        const { data: motoristas, error: err4 } = await supabase
           .from("drivers")
           .select("*")
           .eq("carrier_id", profile.id);
@@ -82,7 +82,7 @@ export function Dashboard() {
         if (err4) throw err4;
 
         // Load available quotations (open/bidding, not created by this carrier)
-        const { data: cotacoes, error: err5 } = await (supabase as any)
+        const { data: cotacoes, error: err5 } = await supabase
           .from("quotations")
           .select("*")
           .neq("shipper_id", profile.id)

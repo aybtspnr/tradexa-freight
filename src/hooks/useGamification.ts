@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-// Any-cast helper for new tables not yet in generated types
-const db: any = supabase;
-
 // --- Level definitions ---
 const LEVELS = [
   { level: 1, xpRequired: 0 },
@@ -151,8 +148,8 @@ export function useGamification(carrierId: string | undefined) {
 
     try {
       // Try RPC first (preferred, returns complete info)
-      const { data, error } = await db.rpc("get_carrier_gamification", {
-        p_carrier_id: carrierId,
+      const { data, error } = await supabase.rpc("get_carrier_gamification", {
+        p_carrier_id: carrierId ?? "",
       });
 
       if (error) throw error;
@@ -163,10 +160,10 @@ export function useGamification(carrierId: string | undefined) {
       }
 
       // Fallback: read raw from table
-      const { data: rawData, error: rawError } = await db
+      const { data: rawData, error: rawError } = await supabase
         .from("carrier_gamification")
         .select("*")
-        .eq("carrier_id", carrierId)
+        .eq("carrier_id", carrierId ?? "")
         .maybeSingle();
 
       if (rawError) throw rawError;
@@ -213,7 +210,7 @@ export function useGamification(carrierId: string | undefined) {
     amount: number,
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const { error } = await db.rpc("add_xp", {
+      const { error } = await supabase.rpc("add_xp", {
         p_carrier_id: targetCarrierId,
         p_amount: amount,
       });
@@ -235,7 +232,7 @@ export function useGamification(carrierId: string | undefined) {
     targetCarrierId: string,
   ): Promise<BadgeInfo[]> {
     try {
-      const { data, error } = await db
+      const { data, error } = await supabase
         .from("carrier_gamification")
         .select("badges")
         .eq("carrier_id", targetCarrierId)

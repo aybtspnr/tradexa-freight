@@ -55,7 +55,8 @@ export function Tabelas() {
       return;
     }
     // Load active routes for the dropdown
-    const { data: rotasData, error: rotasError } = await (supabase.from("routes") as any)
+    const { data: rotasData, error: rotasError } = await supabase
+      .from("routes")
       .select("*")
       .eq("carrier_id", profile.id)
       .eq("active", true);
@@ -74,7 +75,8 @@ export function Tabelas() {
     setRotas(rotasList);
 
     // Load freight tables
-    const { data, error } = await (supabase.from("freight_tables") as any)
+    const { data, error } = await supabase
+      .from("freight_tables")
       .select("*")
       .eq("carrier_id", profile.id)
       .order("created_at", { ascending: false });
@@ -149,7 +151,7 @@ export function Tabelas() {
     };
 
     if (editingId) {
-      const { error } = await (supabase.from("freight_tables") as any).update(record).eq("id", editingId);
+      const { error } = await supabase.from("freight_tables").update(record).eq("id", editingId);
       if (error) {
         console.error("Erro ao atualizar tabela:", error);
         return;
@@ -161,7 +163,7 @@ export function Tabelas() {
         ),
       );
     } else {
-      const { data, error } = await (supabase.from("freight_tables") as any).insert(record).select();
+      const { data, error } = await supabase.from("freight_tables").insert(record).select();
       if (error) {
         console.error("Erro ao cadastrar tabela:", error);
         return;
@@ -191,7 +193,7 @@ export function Tabelas() {
   const handleExcluir = useCallback(
     async (id: string) => {
       if (!window.confirm("Excluir esta tabela de frete?")) return;
-      const { error } = await (supabase.from("freight_tables") as any).delete().eq("id", id);
+      const { error } = await supabase.from("freight_tables").delete().eq("id", id);
       if (error) {
         console.error("Erro ao excluir tabela:", error);
         return;

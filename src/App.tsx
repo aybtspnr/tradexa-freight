@@ -19,7 +19,7 @@ const Ajuda = lazy(() => import("@/app/(public)/Ajuda").then(m => ({ default: m.
 const PortalMotorista = lazy(() => import("@/app/(public)/PortalMotorista").then(m => ({ default: m.PortalMotorista })));
 
 /* ── Lazy-loaded carrier pages ─────────────────────────── */
-const CarrierDashboard = lazy(() => import("@/app/(carrier)/dashboard").then(m => ({ default: m.Dashboard })));
+const CarrierMissoes = lazy(() => import("@/app/(carrier)/missoes").then(m => ({ default: m.MissoesCarrier })));
 const Rotas = lazy(() => import("@/app/(carrier)/rotas").then(m => ({ default: m.Rotas })));
 const Tabelas = lazy(() => import("@/app/(carrier)/tabelas").then(m => ({ default: m.Tabelas })));
 const Frota = lazy(() => import("@/app/(carrier)/frota").then(m => ({ default: m.Frota })));
@@ -32,9 +32,11 @@ const CarrierIndicar = lazy(() => import("@/app/(carrier)/indicar").then(m => ({
 const CarrierContratos = lazy(() => import("@/app/(carrier)/contratos").then(m => ({ default: m.Contratos })));
 const CarrierIntegracoes = lazy(() => import("@/app/(carrier)/integracoes").then(m => ({ default: m.Integracoes })));
 const CarrierConfig = lazy(() => import("@/app/(carrier)/config").then(m => ({ default: m.Config })));
+const CarrierDocumentos = lazy(() => import("@/app/(carrier)/documentos").then(m => ({ default: m.Documentos })));
+const CarrierFinanceiro = lazy(() => import("@/app/(carrier)/financeiro").then(m => ({ default: m.Financeiro })));
 
 /* ── Lazy-loaded shipper pages ─────────────────────────── */
-const ShipperDashboard = lazy(() => import("@/app/(shipper)/dashboard").then(m => ({ default: m.Dashboard })));
+const ShipperMissoes = lazy(() => import("@/app/(shipper)/missoes").then(m => ({ default: m.MissoesShipper })));
 const ShipperCotacoes = lazy(() => import("@/app/(shipper)/cotacoes").then(m => ({ default: m.Cotacoes })));
 const ShipperFretes = lazy(() => import("@/app/(shipper)/fretes").then(m => ({ default: m.Fretes })));
 const Cotar = lazy(() => import("@/app/(shipper)/cotar").then(m => ({ default: m.Cotar })));
@@ -96,7 +98,8 @@ function App() {
             </AuthGuard>
           }
         >
-          <Route path="/carrier" element={<Suspense fallback={<PageLoader />}><CarrierDashboard /></Suspense>} />
+          <Route path="/carrier" element={<Suspense fallback={<PageLoader />}><CarrierMissoes /></Suspense>} />
+          <Route path="/carrier/missoes" element={<Suspense fallback={<PageLoader />}><CarrierMissoes /></Suspense>} />
           <Route path="/carrier/rotas" element={<Suspense fallback={<PageLoader />}><Rotas /></Suspense>} />
           <Route path="/carrier/tabelas" element={<Suspense fallback={<PageLoader />}><Tabelas /></Suspense>} />
           <Route path="/carrier/frota" element={<Suspense fallback={<PageLoader />}><Frota /></Suspense>} />
@@ -109,8 +112,8 @@ function App() {
           <Route path="/carrier/contratos" element={<Suspense fallback={<PageLoader />}><CarrierContratos /></Suspense>} />
           <Route path="/carrier/integracoes" element={<Suspense fallback={<PageLoader />}><CarrierIntegracoes /></Suspense>} />
           <Route path="/carrier/config" element={<Suspense fallback={<PageLoader />}><CarrierConfig /></Suspense>} />
-          <Route path="/carrier/documentos" element={<Placeholder title="Documentos" />} />
-          <Route path="/carrier/financeiro" element={<Placeholder title="Financeiro" />} />
+          <Route path="/carrier/documentos" element={<Suspense fallback={<PageLoader />}><CarrierDocumentos /></Suspense>} />
+          <Route path="/carrier/financeiro" element={<Suspense fallback={<PageLoader />}><CarrierFinanceiro /></Suspense>} />
         </Route>
 
         {/* ── Shipper routes (protected) ───────────── */}
@@ -121,7 +124,8 @@ function App() {
             </AuthGuard>
           }
         >
-          <Route path="/shipper" element={<Suspense fallback={<PageLoader />}><ShipperDashboard /></Suspense>} />
+          <Route path="/shipper" element={<Suspense fallback={<PageLoader />}><ShipperMissoes /></Suspense>} />
+          <Route path="/shipper/missoes" element={<Suspense fallback={<PageLoader />}><ShipperMissoes /></Suspense>} />
           <Route path="/shipper/cotacoes" element={<Suspense fallback={<PageLoader />}><ShipperCotacoes /></Suspense>} />
           <Route path="/shipper/cotar" element={<Suspense fallback={<PageLoader />}><Cotar /></Suspense>} />
           <Route path="/shipper/fretes" element={<Suspense fallback={<PageLoader />}><ShipperFretes /></Suspense>} />
@@ -154,17 +158,6 @@ function App() {
         />
       </Routes>
     </BrowserRouter>
-  );
-}
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-        <p className="mt-2 text-gray-500">Em construção</p>
-      </div>
-    </div>
   );
 }
 

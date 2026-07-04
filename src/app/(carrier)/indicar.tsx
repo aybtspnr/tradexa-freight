@@ -34,7 +34,7 @@ export function Indicar() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (supabase as any).auth.getSession().then(({ data: { session } }: any) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       const id = session?.user?.id ?? profile?.id;
       if (id) {
         setUserId(id);
@@ -54,14 +54,14 @@ export function Indicar() {
     setLoading(true);
 
     // Try Supabase referrals table first
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("referrals")
       .select("*")
       .eq("referrer_id", uid)
       .order("created_at", { ascending: false });
 
     if (data && data.length > 0) {
-      setReferrals(data ?? []);
+      setReferrals((data ?? []) as any[]);
       setStats({
         total_referrals: data.length,
         converted_referrals: data.filter((r: any) =>

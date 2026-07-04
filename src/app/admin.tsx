@@ -51,7 +51,7 @@ export function Admin() {
     setLoading(true);
 
     // Load profiles
-    const { data: p } = await (supabase as any)
+    const { data: p } = await supabase
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false });
@@ -59,14 +59,14 @@ export function Admin() {
     setProfiles(profilesData);
 
     // Load subscriptions
-    const { data: s } = await (supabase as any)
+    const { data: s } = await supabase
       .from("subscriptions")
       .select("*")
       .in("status", ["active", "trialing"]);
     setSubscriptions(s ?? []);
 
     // Aggregations
-    const { data: orders } = await (supabase as any).from("orders").select("*");
+    const { data: orders } = await supabase.from("orders").select("*");
     const allOrders = orders ?? [];
 
     setAgg({
@@ -85,12 +85,12 @@ export function Admin() {
 
   async function handleToggleAdmin(userId: string, currentRole: string) {
     const newRole = currentRole === "admin" ? "shipper" : "admin";
-    await (supabase as any).from("profiles").update({ role: newRole }).eq("id", userId);
+    await supabase.from("profiles").update({ role: newRole }).eq("id", userId);
     loadData();
   }
 
   async function handleCancelSubscription(userId: string) {
-    await (supabase as any)
+    await supabase
       .from("subscriptions")
       .update({ status: "cancelled" })
       .eq("user_id", userId);
@@ -341,7 +341,7 @@ function HighlightsManager() {
   useEffect(() => { loadCarriers(); }, []);
 
   async function loadCarriers() {
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("profiles")
       .select("id, name, email, role, is_featured, featured_until")
       .eq("role", "carrier")
@@ -353,7 +353,7 @@ function HighlightsManager() {
 
   async function handleToggle(carrierId: string, currentlyFeatured: boolean) {
     setToggling(carrierId);
-    const { error } = await (supabase as any).rpc("toggle_carrier_featured", {
+    const { error } = await supabase.rpc("toggle_carrier_featured", {
       p_carrier_id: carrierId,
       p_featured: !currentlyFeatured,
       p_days: 30,

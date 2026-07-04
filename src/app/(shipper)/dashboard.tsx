@@ -7,20 +7,11 @@ import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 
 /* ─── Types ───────────────────────────────────────────────── */
 
-interface Cotacao {
-  id: string;
-  origem: string;
-  destino: string;
-  data: string;
-  status: string;
-  ofertas: number;
-}
-
 interface DashboardData {
   cotacoesAtivas: number;
   fretesAndamento: number;
   economiaTotal: number;
-  recentes: Cotacao[];
+  recentes: any[];
   loading: boolean;
   error: string | null;
 }
@@ -47,7 +38,7 @@ export function Dashboard() {
     const fetchDashboard = async () => {
       try {
         // Fetch quotations
-        const { data: cotacoes, error: err1 } = await (supabase as any)
+        const { data: cotacoes, error: err1 } = await supabase
           .from("quotations")
           .select("*")
           .eq("shipper_id", profile.id)
@@ -56,7 +47,7 @@ export function Dashboard() {
         if (err1) throw err1;
 
         // Fetch orders
-        const { data: fretes, error: err2 } = await (supabase as any)
+        const { data: fretes, error: err2 } = await supabase
           .from("orders")
           .select("*")
           .eq("shipper_id", profile.id);
@@ -65,12 +56,12 @@ export function Dashboard() {
 
         // Calculate KPIs
         const cotacoesAtivas =
-          ((cotacoes || []) as any[]).filter(
+          (cotacoes || []).filter(
             (c: any) => c.status === "open" || c.status === "bidding",
           ).length;
 
         const fretesAndamento =
-          ((fretes || []) as any[]).filter(
+          (fretes || []).filter(
             (f: any) =>
               f.status === "confirmed" ||
               f.status === "picked_up" ||
@@ -79,14 +70,14 @@ export function Dashboard() {
 
         // Economy estimated as 15% of total delivered freight value (mock calculation)
         const totalGasto =
-          ((fretes || []) as any[]).reduce(
+          (fretes || []).reduce(
             (sum: number, f: any) => sum + Number(f.price || 0),
             0,
           );
         const economiaTotal = Math.round(totalGasto * 0.15);
 
         // Recent quotations (top 5)
-        const recentes: Cotacao[] = ((cotacoes || []) as any[])
+        const recentes: any[] = (cotacoes || [])
           .slice(0, 5)
           .map((c: any) => ({
             id: c.id,

@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-const db: any = supabase;
-
 const apiEndpoints = [
   {
     method: "GET",
@@ -78,11 +76,11 @@ export function Integracoes() {
 
   async function generateApiKey() {
     const key = `tf_${crypto.randomUUID().replace(/-/g, "")}`;
-    const { error } = await db.from("api_keys").insert({
+    const { error } = await supabase.from("api_keys").insert({
       key,
       name: "ERP Integration",
       active: true,
-      user_id: (await supabase.auth.getSession()).data.session?.user?.id,
+      user_id: (await supabase.auth.getSession()).data.session?.user?.id ?? "",
     });
     if (error) {
       alert("Erro ao gerar chave: " + error.message);

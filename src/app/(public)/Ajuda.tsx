@@ -1,4 +1,80 @@
+import { useSeo } from "@/hooks/useSeo";
+
 export function Ajuda() {
+  const seo = useSeo({
+    title: "Ajuda e Perguntas Frequentes — TradeXa Fretes",
+    description:
+      "Tire suas dúvidas sobre a TradeXa Fretes: como funciona, planos, pagamento, rastreamento, verificação de transportadoras e mais. FAQ completa.",
+    keywords:
+      "ajuda TradeXa, perguntas frequentes, FAQ frete, dúvidas fretes, suporte TradeXa Fretes",
+    canonical: "https://www.tradexafretes.com.br/ajuda",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "FAQPage",
+          mainEntity: [
+            {
+              "@type": "Question",
+              name: "Como funciona o Tradexa Fretes?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Tradexa Fretes é um marketplace B2B de fretes. Embarcadores publicam suas cargas, transportadoras verificadas enviam propostas, e você escolhe a melhor. Tudo com rastreamento, documentação digital e pagamento seguro integrados.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Preciso ter CNPJ para usar?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Sim, a plataforma é exclusiva para pessoas jurídicas. Embarcadores e transportadoras precisam de CNPJ ativo. Transportadoras também precisam de RNTRC (ANTT) regular.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Quanto custa?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Temos planos a partir de R$ 149/mês (Plano Pro) com cotações ilimitadas. O plano Grátis permite até 3 cotações por mês.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Como as transportadoras são verificadas?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Toda transportadora passa por validação de documentos: CNPJ, RNTRC, certidões negativas, comprovante de seguro. Mantemos um sistema de reputação com avaliações de embarcadores.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Como funciona o pagamento?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "O pagamento é processado online via split automático. O embarcador paga, a transportadora recebe, e a plataforma retém a comissão. Aceitamos PIX, cartão de crédito e boleto bancário.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Posso cancelar minha assinatura?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Sim, você pode cancelar a qualquer momento. O acesso permanece até o fim do período já pago. Não há multa de cancelamento.",
+              },
+            },
+          ],
+        },
+        {
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Home", item: "https://www.tradexafretes.com.br" },
+            { "@type": "ListItem", position: 2, name: "Ajuda", item: "https://www.tradexafretes.com.br/ajuda" },
+          ],
+        },
+      ],
+    },
+  });
+
   const faqItems = [
     {
       q: "Como funciona o Tradexa Fretes?",
@@ -43,7 +119,9 @@ export function Ajuda() {
   ];
 
   return (
-    <section className="py-20 sm:py-28 bg-background">
+    <>
+      {seo}
+      <section className="py-20 sm:py-28 bg-background">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
         <div className="text-center">
           <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
@@ -110,6 +188,7 @@ export function Ajuda() {
         </div>
       </div>
     </section>
+    </>
   );
 }
 

@@ -76,8 +76,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             email: user.email ?? email,
             name,
             role,
-          } as never,
-          { onConflict: "id" } as never,
+          },
+          { onConflict: "id" },
         );
 
       if (profileError) {

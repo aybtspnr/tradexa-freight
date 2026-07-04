@@ -1,15 +1,17 @@
 import type { User } from "@supabase/supabase-js";
+import type { Database } from "@/types/supabase";
 
-// ─── Profile ────────────────────────────────────────────────
-export interface Profile {
-  id: string;
-  email: string;
-  name: string;
-  role: "carrier" | "shipper" | "admin";
-  created_at: string;
-}
+/* ─── Re-export generated types for convenience ────────── */
 
-// ─── User / Auth ───────────────────────────────────────────
+type Schema = Database["freight"];
+type Tables = Schema["Tables"];
+type Enums = Schema["Enums"];
+
+// --- Profiles ---
+export type Profile = Tables["profiles"]["Row"];
+export type UserRole = Enums["user_role"];
+
+// --- Auth ---
 export type AuthUser = User;
 
 export interface AuthSession {
@@ -17,19 +19,8 @@ export interface AuthSession {
   loading: boolean;
 }
 
-// ─── Freight / Shipping ────────────────────────────────────
-export interface Freight {
-  id: string;
-  origin: string;
-  destination: string;
-  weight_kg: number;
-  volume_m3: number;
-  description: string;
-  status: FreightStatus;
-  created_at: string;
-  updated_at: string;
-  user_id: string;
-}
+// --- Freight / Orders ---
+export type Freight = Tables["orders"]["Row"];
 
 export type FreightStatus =
   | "pending"
@@ -38,21 +29,31 @@ export type FreightStatus =
   | "delivered"
   | "cancelled";
 
-// ─── Quote ─────────────────────────────────────────────────
-export interface Quote {
-  id: string;
-  freight_id: string;
-  carrier_id: string;
-  amount_cents: number;
-  estimated_days: number;
-  notes: string | null;
-  status: QuoteStatus;
-  created_at: string;
-}
+// --- Quotes ---
+export type Quote = Tables["quotations"]["Row"];
+export type QuoteBid = Tables["quotation_bids"]["Row"];
 
 export type QuoteStatus = "pending" | "accepted" | "rejected";
 
-// ─── Common ────────────────────────────────────────────────
+// --- Fleet ---
+export type Fleet = Tables["fleet"]["Row"];
+
+// --- Drivers ---
+export type Driver = Tables["drivers"]["Row"];
+
+// --- Routes ---
+export type Route = Tables["routes"]["Row"];
+
+// --- Freight Tables ---
+export type FreightTable = Tables["freight_tables"]["Row"];
+
+// --- Notifications ---
+export type Notification = Tables["notifications"]["Row"];
+
+// --- Contracts ---
+export type Contract = Tables["contracts"]["Row"];
+
+// --- Common ---
 export type LoadingState = "idle" | "loading" | "succeeded" | "failed";
 
 export interface ApiError {

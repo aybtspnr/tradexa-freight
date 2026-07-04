@@ -67,13 +67,13 @@ export function DetalheCotacaoModal({ quotationId, userId, isCarrier, onClose, o
   async function loadData() {
     setLoading(true);
 
-    const { data: q } = await (supabase as any)
+    const { data: q } = await supabase
       .from("quotations")
       .select("*, ncm_classifications(*)")
       .eq("id", quotationId)
       .single();
 
-    const { data: b } = await (supabase as any)
+    const { data: b } = await supabase
       .from("quotation_bids")
       .select("*")
       .eq("quotation_id", quotationId)
@@ -98,7 +98,7 @@ export function DetalheCotacaoModal({ quotationId, userId, isCarrier, onClose, o
     const carrierIds = [...new Set(bidList.map((bid) => bid.carrier_id))];
 
     // Get carrier names and certs
-    const { data: profiles } = await (supabase as any)
+    const { data: profiles } = await supabase
       .from("profiles")
       .select("id, name")
       .in("id", carrierIds);
@@ -110,7 +110,7 @@ export function DetalheCotacaoModal({ quotationId, userId, isCarrier, onClose, o
 
     for (const cId of carrierIds) {
       // Check if there's a carrier_ncm_certifications table entry
-      const { data: certs } = await (supabase as any)
+      const { data: certs } = await supabase
         .from("carrier_ncm_certifications")
         .select("certification_type")
         .eq("carrier_id", cId)
@@ -151,7 +151,7 @@ export function DetalheCotacaoModal({ quotationId, userId, isCarrier, onClose, o
   }
 
   async function handleAcceptBid(bidId: string, carrierId: string, price: number) {
-    const { error } = await (supabase as any).from("orders").insert({
+    const { error } = await supabase.from("orders").insert({
       quotation_id: quotationId,
       shipper_id: userId,
       carrier_id: carrierId,
@@ -162,14 +162,14 @@ export function DetalheCotacaoModal({ quotationId, userId, isCarrier, onClose, o
 
     if (error) { alert("Erro: " + error.message); return; }
 
-    await (supabase as any).from("quotations").update({ status: "closed" }).eq("id", quotationId);
-    await (supabase as any).from("quotation_bids").update({ status: "accepted" }).eq("id", bidId);
-    await (supabase as any).from("quotation_bids").update({ status: "rejected" }).eq("quotation_id", quotationId).neq("id", bidId);
+    await supabase.from("quotations").update({ status: "closed" }).eq("id", quotationId);
+    await supabase.from("quotation_bids").update({ status: "accepted" }).eq("id", bidId);
+    await supabase.from("quotation_bids").update({ status: "rejected" }).eq("quotation_id", quotationId).neq("id", bidId);
     onUpdated();
   }
 
   async function handleCancel() {
-    await (supabase as any).from("quotations").update({ status: "cancelled" }).eq("id", quotationId);
+    await supabase.from("quotations").update({ status: "cancelled" }).eq("id", quotationId);
     onUpdated();
   }
 

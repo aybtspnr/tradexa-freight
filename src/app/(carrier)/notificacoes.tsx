@@ -20,7 +20,7 @@ export function Notificacoes() {
   const [filter, setFilter] = useState<"all" | "unread">("all");
 
   useEffect(() => {
-    (supabase as any).auth.getSession().then(({ data: { session } }: any) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
   }, []);
@@ -34,7 +34,7 @@ export function Notificacoes() {
     if (!userId) return;
     setLoading(true);
 
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("notifications")
       .select("*")
       .eq("user_id", userId)
@@ -46,7 +46,7 @@ export function Notificacoes() {
   }
 
   async function handleMarkRead(id: string) {
-    await (supabase as any)
+    await supabase
       .from("notifications")
       .update({ read: true })
       .eq("id", id);
@@ -60,7 +60,7 @@ export function Notificacoes() {
     const userId = user?.id ?? profile?.id;
     if (!userId) return;
 
-    await (supabase as any)
+    await supabase
       .from("notifications")
       .update({ read: true })
       .eq("user_id", userId)

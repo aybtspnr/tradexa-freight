@@ -10,12 +10,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+export const supabase = createClient<Database, "freight">(
+  supabaseUrl,
+  supabaseAnonKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+    db: {
+      schema: "freight",
+    },
   },
-  db: {
-    schema: "freight" as any,
-  },
-});
+);

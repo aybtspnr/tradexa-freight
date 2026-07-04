@@ -35,7 +35,7 @@ export function Relatorios() {
   const [tab, setTab] = useState<"overview" | "quotations" | "financial">("overview");
 
   useEffect(() => {
-    (supabase as any).auth.getSession().then(({ data: { session } }: any) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
   }, []);
@@ -48,23 +48,23 @@ export function Relatorios() {
     setLoading(true);
 
     // ── Quotations ──
-    const { data: quotations } = await (supabase as any).from("quotations").select("*");
+    const { data: quotations } = await supabase.from("quotations").select("*");
     const qs = quotations ?? [];
 
     // ── Bids ──
-    const { data: bids } = await (supabase as any).from("quotation_bids").select("*");
+    const { data: bids } = await supabase.from("quotation_bids").select("*");
     const bs = bids ?? [];
 
     // ── Orders ──
-    const { data: orders } = await (supabase as any).from("orders").select("*");
+    const { data: orders } = await supabase.from("orders").select("*");
     const os = orders ?? [];
 
     // ── Profiles ──
-    const { data: profiles } = await (supabase as any).from("profiles").select("role");
+    const { data: profiles } = await supabase.from("profiles").select("role");
     const ps = profiles ?? [];
 
     // ── Subscriptions ──
-    const { data: subs } = await (supabase as any).from("subscriptions").select("plan, status");
+    const { data: subs } = await supabase.from("subscriptions").select("plan, status");
     const sbs = subs ?? [];
 
     // Status distribution

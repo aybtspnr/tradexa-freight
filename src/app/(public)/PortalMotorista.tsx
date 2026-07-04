@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency } from "@/utils/format";
+import { useSeo } from "@/hooks/useSeo";
 
 interface MotoristaOrder {
   id: string;
@@ -23,6 +24,16 @@ interface MotoristaOrder {
 }
 
 export function PortalMotorista() {
+  const seo = useSeo({
+    title: "Portal do Motorista — TradeXa Fretes",
+    description:
+      "Acesse o portal do motorista TradeXa Fretes: visualize suas viagens ativas, pendentes e finalizadas. Atualize status de entrega em tempo real.",
+    keywords:
+      "portal motorista, app motorista frete, TradeXa motorista, viagens ativas, entregas",
+    canonical: "https://www.tradexafretes.com.br/portal-motorista",
+    noIndex: true,
+  });
+
   const user = useAuthStore((s) => s.user);
   const [orders, setOrders] = useState<MotoristaOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +52,7 @@ export function PortalMotorista() {
       : ["delivered", "completed", "cancelled"];
 
     // Get carrier's assigned orders with details
-    const { data: ordersData } = await (supabase as any)
+    const { data: ordersData } = await supabase
       .from("orders")
       .select(`
         *,
@@ -68,7 +79,7 @@ export function PortalMotorista() {
       if (!q) continue;
 
       // Get shipper profile
-      const { data: shipperProfile } = await (supabase as any)
+      const { data: shipperProfile } = await supabase
         .from("profiles")
         .select("name, phone")
         .eq("id", q.shipper_id)
@@ -99,7 +110,7 @@ export function PortalMotorista() {
   }
 
   async function handleStatusUpdate(orderId: string, newStatus: string) {
-    await (supabase as any).from("orders").update({ status: newStatus }).eq("id", orderId);
+    await supabase.from("orders").update({ status: newStatus }).eq("id", orderId);
     loadOrders();
   }
 
@@ -120,7 +131,9 @@ export function PortalMotorista() {
   ];
 
   return (
-    <div className="pb-20">
+    <>
+      {seo}
+      <div className="pb-20">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-border bg-white px-4 py-4">
         <div className="flex items-center gap-3">
@@ -288,6 +301,7 @@ export function PortalMotorista() {
         )}
       </div>
     </div>
+    </>
   );
 }
 
