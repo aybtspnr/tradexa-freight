@@ -171,7 +171,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
 
 /* ─── Status Badge ──────────────────────────────────────────── */
 
-function StatusBadge({ status, label, cls }: { status: string; label: string; cls: string }) {
+function StatusBadge({ label, cls }: { label: string; cls: string }) {
   return (
     <span
       className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}
@@ -204,7 +204,6 @@ export function Cotacoes() {
   const [error, setError] = useState<string | null>(null);
 
   const carrierId = profile?.id ?? "";
-  const carrierName = profile?.name ?? "Minha Transportadora";
 
   /* ─── Load data ────────────────────────────────────────── */
 
@@ -234,11 +233,11 @@ export function Cotacoes() {
         (fleetData ?? []).map((v) => ({
           id: v.id,
           plate: v.plate,
-          model: v.model,
-          year: v.year,
-          capacity_kg: v.capacity_kg,
-          capacity_m3: v.capacity_m3,
-          vehicle_type: v.vehicle_type,
+          model: v.model ?? "",
+          year: v.year ?? 0,
+          capacity_kg: v.capacity_kg ?? 0,
+          capacity_m3: v.capacity_m3 ?? 0,
+          vehicle_type: v.vehicle_type ?? "caminhao",
         })),
       );
 
@@ -254,7 +253,7 @@ export function Cotacoes() {
         (driverData ?? []).map((d) => ({
           id: d.id,
           name: d.name,
-          cpf: d.cpf,
+          cpf: d.cpf ?? "",
         })),
       );
 
@@ -273,15 +272,15 @@ export function Cotacoes() {
           shipper_id: q.shipper_id,
           cargo_type: q.cargo_type ?? "",
           cargo_description: q.cargo_description ?? "",
-          weight_kg: q.weight_kg,
-          volume_m3: q.volume_m3,
+          weight_kg: q.weight_kg ?? 0,
+          volume_m3: q.volume_m3 ?? 0,
           origin_city: q.origin_city,
           origin_state: q.origin_state,
           destination_city: q.destination_city,
           destination_state: q.destination_state,
           pickup_date: q.pickup_date ?? "",
           delivery_date: q.delivery_date ?? "",
-          status: q.status,
+          status: q.status ?? "open",
           created_at: q.created_at ?? "",
         })),
       );
@@ -300,11 +299,11 @@ export function Cotacoes() {
           quotation_id: b.quotation_id,
           carrier_id: b.carrier_id,
           price: b.price,
-          estimated_days: b.estimated_days,
+          estimated_days: b.estimated_days ?? 0,
           vehicle_id: b.vehicle_id,
           driver_id: b.driver_id,
           notes: b.notes,
-          status: b.status,
+          status: b.status ?? "pending",
           created_at: b.created_at ?? "",
           vehicle: b.vehicle as { plate: string; model: string } | null,
           driver: b.driver as { name: string } | null,
@@ -565,7 +564,6 @@ export function Cotacoes() {
                       </span>
                       {BID_STATUS_LABEL[myBid.status] && (
                         <StatusBadge
-                          status={myBid.status}
                           label={BID_STATUS_LABEL[myBid.status].label}
                           cls={BID_STATUS_LABEL[myBid.status].cls}
                         />
@@ -657,7 +655,6 @@ export function Cotacoes() {
                         <td className="px-4 py-3 text-gray-600">{driverLabel}</td>
                         <td className="px-4 py-3">
                           <StatusBadge
-                            status={b.status}
                             label={bidStatus.label}
                             cls={bidStatus.cls}
                           />
@@ -701,7 +698,6 @@ export function Cotacoes() {
                         </p>
                       </div>
                       <StatusBadge
-                        status={b.status}
                         label={bidStatus.label}
                         cls={bidStatus.cls}
                       />

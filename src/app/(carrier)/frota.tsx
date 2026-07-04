@@ -77,14 +77,8 @@ const DB_TO_UI_STATUS: Record<string, StatusVeiculo> = {
   maintenance: "manutencao",
 };
 
-const UI_TO_DB_TIPO: Record<TipoVeiculo, string> = {
-  caminhao: "caminhao",
-  van: "van",
-  carreta: "carreta",
-  utilitario: "utilitario",
-  bitrem: "bitrem",
-  rodotrem: "rodotrem",
-};
+  // ── Unused but kept for reference ──
+  /* const UI_TO_DB_TIPO: Record<TipoVeiculo, string> = {...}; */
 
 // ── Helpers ────────────────────────────────────────────
 
@@ -212,7 +206,7 @@ export function Frota() {
     setPlacaError("");
 
     const dbStatus = UI_TO_DB_STATUS[form.status] ?? "available";
-    const record: Record<string, unknown> = {
+    const record = {
       carrier_id: profile.id,
       plate: formatarPlaca(placaUpper),
       model: form.modelo,
@@ -225,17 +219,11 @@ export function Frota() {
     };
 
     if (editingId) {
-      const { error } = await supabase.from("fleet").update(record).eq("id", editingId);
-      if (error) {
-        console.error("Erro ao atualizar veículo:", error);
-        return;
-      }
+      const { error } = await supabase.from("fleet").update(record as any).eq("id", editingId);
+      if (error) { console.error("Erro ao atualizar:", error); return; }
     } else {
       const { error } = await supabase.from("fleet").insert(record as any);
-      if (error) {
-        console.error("Erro ao cadastrar veículo:", error);
-        return;
-      }
+      if (error) { console.error("Erro ao inserir:", error); return; }
     }
 
     await loadVeiculos();

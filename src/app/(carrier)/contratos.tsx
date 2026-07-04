@@ -79,7 +79,6 @@ function getStatusBadge(status: string) {
 /* ─── Detail Modal ────────────────────────────────────────── */
 
 function ContractDetailModal({ contract, onClose }: { contract: Contract; onClose: () => void }) {
-  const cfg = statusConfig[contract.status] ?? statusConfig.cancelled;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={onClose}>
       <div className="mt-8 w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -334,8 +333,6 @@ export function Contratos() {
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((c) => {
-            const cfg = statusConfig[c.status] ?? statusConfig.cancelled;
-            const isActive = c.status === "active" || c.status === "paused";
             return (
               <div
                 key={c.id}
@@ -398,7 +395,7 @@ export function Contratos() {
                 </div>
 
                 {/* Actions */}
-                {isActive && (
+                {(c.status === "active" || c.status === "paused") && (
                   <div className="mt-4 flex gap-2 border-t border-gray-100 pt-3" onClick={(e) => e.stopPropagation()}>
                     {c.status === "active" && (
                       <button
