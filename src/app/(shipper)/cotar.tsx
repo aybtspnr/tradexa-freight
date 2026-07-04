@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/authStore";
@@ -105,7 +105,7 @@ function deg2rad(deg: number): number {
   return deg * (Math.PI / 180);
 }
 
-function calcDistanciaKm(uf1: string, cidade1: string, uf2: string, cidade2: string): number {
+function calcDistanciaKm(uf1: string, _cidade1: string, uf2: string, _cidade2: string): number {
   const c1 = UF_CENTROIDS[uf1];
   const c2 = UF_CENTROIDS[uf2];
   if (!c1 || !c2) return 0;
@@ -428,7 +428,7 @@ export function Cotar() {
       pickup_date: form.data_coleta,
       delivery_date: form.data_entrega,
       expected_value: form.preco_sugerido,
-    });
+    } as any);
 
     setSubmitting(false);
 
