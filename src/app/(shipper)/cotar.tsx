@@ -12,10 +12,14 @@ interface CotacaoForm {
   descricao: string;
   peso_kg: number;
   volume_m3: number;
-  origem_cidade: string;
   origem_estado: string;
-  destino_cidade: string;
+  origem_cidade: string;
+  origem_endereco: string;
   destino_estado: string;
+  destino_cidade: string;
+  destino_endereco: string;
+  distancia_km: number;
+  preco_sugerido: number;
   data_coleta: string;
   data_entrega: string;
   refrigerado: boolean;
@@ -24,47 +28,42 @@ interface CotacaoForm {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Data: Brazilian cities
+   Data: Brazilian cities (from VPS database)
    ═══════════════════════════════════════════════════════════════ */
 
-interface Cidade {
-  nome: string;
-  estado: string;
-}
+import cidadesData from "@/data/cidades-br.json";
 
-const CIDADES: Cidade[] = [
-  { nome: "São Paulo", estado: "SP" },
-  { nome: "Campinas", estado: "SP" },
-  { nome: "Guarulhos", estado: "SP" },
-  { nome: "Santos", estado: "SP" },
-  { nome: "Rio de Janeiro", estado: "RJ" },
-  { nome: "Niterói", estado: "RJ" },
-  { nome: "Belo Horizonte", estado: "MG" },
-  { nome: "Uberlândia", estado: "MG" },
-  { nome: "Porto Alegre", estado: "RS" },
-  { nome: "Caxias do Sul", estado: "RS" },
-  { nome: "Curitiba", estado: "PR" },
-  { nome: "Londrina", estado: "PR" },
-  { nome: "Florianópolis", estado: "SC" },
-  { nome: "Joinville", estado: "SC" },
-  { nome: "Salvador", estado: "BA" },
-  { nome: "Feira de Santana", estado: "BA" },
-  { nome: "Recife", estado: "PE" },
-  { nome: "Fortaleza", estado: "CE" },
-  { nome: "Manaus", estado: "AM" },
-  { nome: "Belém", estado: "PA" },
-  { nome: "Brasília", estado: "DF" },
-  { nome: "Goiânia", estado: "GO" },
-  { nome: "Cuiabá", estado: "MT" },
-  { nome: "Campo Grande", estado: "MS" },
-  { nome: "Vitória", estado: "ES" },
+const CIDADES_BY_UF = cidadesData as Record<string, string[]>;
+
+const ESTADOS_BR = [
+  { sigla: "AC", nome: "Acre" },
+  { sigla: "AL", nome: "Alagoas" },
+  { sigla: "AM", nome: "Amazonas" },
+  { sigla: "AP", nome: "Amapá" },
+  { sigla: "BA", nome: "Bahia" },
+  { sigla: "CE", nome: "Ceará" },
+  { sigla: "DF", nome: "Distrito Federal" },
+  { sigla: "ES", nome: "Espírito Santo" },
+  { sigla: "GO", nome: "Goiás" },
+  { sigla: "MA", nome: "Maranhão" },
+  { sigla: "MG", nome: "Minas Gerais" },
+  { sigla: "MS", nome: "Mato Grosso do Sul" },
+  { sigla: "MT", nome: "Mato Grosso" },
+  { sigla: "PA", nome: "Pará" },
+  { sigla: "PB", nome: "Paraíba" },
+  { sigla: "PE", nome: "Pernambuco" },
+  { sigla: "PI", nome: "Piauí" },
+  { sigla: "PR", nome: "Paraná" },
+  { sigla: "RJ", nome: "Rio de Janeiro" },
+  { sigla: "RN", nome: "Rio Grande do Norte" },
+  { sigla: "RO", nome: "Rondônia" },
+  { sigla: "RR", nome: "Roraima" },
+  { sigla: "RS", nome: "Rio Grande do Sul" },
+  { sigla: "SC", nome: "Santa Catarina" },
+  { sigla: "SE", nome: "Sergipe" },
+  { sigla: "SP", nome: "São Paulo" },
+  { sigla: "TO", nome: "Tocantins" },
 ];
-
-const ESTADOS = [
-  "SP", "RJ", "MG", "RS", "PR", "SC",
-  "BA", "PE", "CE", "AM", "PA", "DF",
-  "GO", "MT", "MS", "ES",
-] as const;
 
 /* ═══════════════════════════════════════════════════════════════
    Cargo type options with icons
@@ -85,8 +84,61 @@ const TIPOS_CARGA: CargoOption[] = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════
-   Helpers
+   Haversine: approximate distances between UF centroids
    ═══════════════════════════════════════════════════════════════ */
+
+interface LatLng { lat: number; lng: number }
+
+const UF_CENTROIDS: Record<string, LatLng> = {
+  AC: {lat:-9.98, lng:-67.81}, AL: {lat:-9.62, lng:-36.68}, AM: {lat:-3.47, lng:-62.22},
+  AP: {lat:0.90, lng:-52.00}, BA: {lat:-13.29, lng:-41.71}, CE: {lat:-5.20, lng:-39.53},
+  DF: {lat:-15.83, lng:-47.86}, ES: {lat:-19.19, lng:-40.34}, GO: {lat:-16.64, lng:-49.31},
+  MA: {lat:-5.42, lng:-45.44}, MG: {lat:-18.10, lng:-44.38}, MS: {lat:-20.51, lng:-54.54},
+  MT: {lat:-12.68, lng:-55.78}, PA: {lat:-3.79, lng:-52.48}, PB: {lat:-7.24, lng:-36.53},
+  PE: {lat:-8.38, lng:-37.86}, PI: {lat:-6.60, lng:-42.28}, PR: {lat:-24.89, lng:-51.55},
+  RJ: {lat:-22.25, lng:-42.66}, RN: {lat:-5.81, lng:-36.59}, RO: {lat:-10.83, lng:-63.34},
+  RR: {lat:2.82, lng:-60.67}, RS: {lat:-30.17, lng:-53.50}, SC: {lat:-27.33, lng:-49.44},
+  SE: {lat:-10.57, lng:-37.45}, SP: {lat:-22.19, lng:-48.79}, TO: {lat:-9.46, lng:-48.16},
+};
+
+function deg2rad(deg: number): number {
+  return deg * (Math.PI / 180);
+}
+
+function calcDistanciaKm(uf1: string, cidade1: string, uf2: string, cidade2: string): number {
+  const c1 = UF_CENTROIDS[uf1];
+  const c2 = UF_CENTROIDS[uf2];
+  if (!c1 || !c2) return 0;
+  const R = 6371;
+  const dLat = deg2rad(c2.lat - c1.lat);
+  const dLng = deg2rad(c2.lng - c1.lng);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(c1.lat)) * Math.cos(deg2rad(c2.lat)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const dist = R * c;
+  // Add ~15% for road distance (vs straight line)
+  return Math.round(dist * 1.15);
+}
+
+function formatDistancia(km: number): string {
+  if (km === 0) return "—";
+  return `${km.toLocaleString("pt-BR")} km`;
+}
+
+function formatPreco(preco: number): string {
+  return preco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function calcPrecoSugerido(distanciaKm: number, pesoKg: number): number {
+  if (distanciaKm <= 0 || pesoKg <= 0) return 0;
+  // R$ 0.10 / kg / km (rough estimate for full truckload)
+  const ratePerKgKm = 0.10;
+  const base = distanciaKm * pesoKg * ratePerKgKm;
+  // Minimum R$ 200
+  return Math.max(200, Math.round(base));
+}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "—";
@@ -239,10 +291,14 @@ export function Cotar() {
     descricao: "",
     peso_kg: 0,
     volume_m3: 0,
-    origem_cidade: "",
     origem_estado: "",
-    destino_cidade: "",
+    origem_cidade: "",
+    origem_endereco: "",
     destino_estado: "",
+    destino_cidade: "",
+    destino_endereco: "",
+    distancia_km: 0,
+    preco_sugerido: 0,
     data_coleta: "",
     data_entrega: "",
     refrigerado: false,
@@ -272,23 +328,55 @@ export function Cotar() {
         );
       case 2:
         return (
-          form.origem_cidade !== "" &&
           form.origem_estado !== "" &&
-          form.destino_cidade !== "" &&
+          form.origem_cidade !== "" &&
+          form.origem_endereco.trim().length >= 5 &&
           form.destino_estado !== "" &&
+          form.destino_cidade !== "" &&
+          form.destino_endereco.trim().length >= 5 &&
           !(
             form.origem_cidade === form.destino_cidade &&
             form.origem_estado === form.destino_estado
           )
         );
       case 3:
-        return form.data_coleta !== "" && form.data_entrega !== "";
+        return form.data_coleta !== "" && form.data_entrega !== "" && form.preco_sugerido > 0;
       case 4:
         return true;
       default:
         return false;
     }
   }, [step, form]);
+
+  // Auto-calculate distance when origin/destination changes
+  const calcRoute = useCallback(() => {
+    if (form.origem_estado && form.origem_cidade && form.destino_estado && form.destino_cidade) {
+      const dist = calcDistanciaKm(
+        form.origem_estado, form.origem_cidade,
+        form.destino_estado, form.destino_cidade
+      );
+      const preco = calcPrecoSugerido(dist, form.peso_kg);
+      setForm(prev => ({
+        ...prev,
+        distancia_km: dist,
+        preco_sugerido: Math.max(prev.preco_sugerido, preco),
+      }));
+    }
+  }, [form.origem_estado, form.origem_cidade, form.destino_estado, form.destino_cidade, form.peso_kg]);
+
+  useEffect(() => {
+    if (form.origem_estado && form.origem_cidade && form.destino_estado && form.destino_cidade) {
+      calcRoute();
+    }
+  }, [form.origem_estado, form.origem_cidade, form.destino_estado, form.destino_cidade]);
+
+  // Update suggested price when weight changes
+  useEffect(() => {
+    if (form.distancia_km > 0 && form.peso_kg > 0) {
+      const preco = calcPrecoSugerido(form.distancia_km, form.peso_kg);
+      setForm(prev => ({ ...prev, preco_sugerido: preco }));
+    }
+  }, [form.peso_kg, form.distancia_km]);
 
   const origemLabel = form.origem_cidade
     ? `${form.origem_cidade}, ${form.origem_estado}`
@@ -328,14 +416,18 @@ export function Cotar() {
       shipper_id: profile.id,
       origin_city: form.origem_cidade,
       origin_state: form.origem_estado,
+      origin_address: form.origem_endereco,
       destination_city: form.destino_cidade,
       destination_state: form.destino_estado,
+      destination_address: form.destino_endereco,
+      distance_km: form.distancia_km,
       cargo_description: descricao,
       weight_kg: form.peso_kg,
       volume_m3: form.volume_m3,
       cargo_type: form.tipo_carga,
       pickup_date: form.data_coleta,
       delivery_date: form.data_entrega,
+      expected_value: form.preco_sugerido,
     });
 
     setSubmitting(false);
@@ -660,6 +752,10 @@ export function Cotar() {
       form.origem_cidade === form.destino_cidade &&
       form.origem_estado === form.destino_estado;
 
+    // Cidades filtradas por estado selecionado
+    const cidadesOrigem = form.origem_estado ? CIDADES_BY_UF[form.origem_estado] ?? [] : [];
+    const cidadesDestino = form.destino_estado ? CIDADES_BY_UF[form.destino_estado] ?? [] : [];
+
     return (
       <div className="surface-card rounded-2xl p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
@@ -671,141 +767,149 @@ export function Cotar() {
               Origem e Destino
             </h2>
             <p className="text-sm text-gray-500">
-              Selecione as cidades de coleta e entrega
+              Escolha estado, cidade e endereço completo
             </p>
           </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Origem */}
+          {/* ══════ ORIGEM ══════ */}
           <div>
             <label className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-[10px] font-bold text-green-700">
-                A
-              </span>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-[10px] font-bold text-green-700">A</span>
               Origem
             </label>
             <div className="space-y-3">
+              {/* Estado */}
+              <select
+                value={form.origem_estado}
+                onChange={(e) => {
+                  update("origem_estado", e.target.value);
+                  update("origem_cidade", "");
+                }}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+              >
+                <option value="">Estado (UF)</option>
+                {ESTADOS_BR.map((e) => (
+                  <option key={`oe-${e.sigla}`} value={e.sigla}>
+                    {e.sigla} — {e.nome}
+                  </option>
+                ))}
+              </select>
+              {/* Cidade (dependente do estado) */}
               <select
                 value={form.origem_cidade}
                 onChange={(e) => update("origem_cidade", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+                disabled={!form.origem_estado}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <option value="">Selecione a cidade...</option>
-                {CIDADES.map((c) => (
-                  <option key={`o-${c.nome}-${c.estado}`} value={c.nome}>
-                    {c.nome}
+                <option value="">{form.origem_estado ? "Selecione a cidade..." : "Primeiro escolha o estado"}</option>
+                {cidadesOrigem.map((cid) => (
+                  <option key={`oc-${cid}`} value={cid}>
+                    {cid}
                   </option>
                 ))}
               </select>
-              <select
-                value={form.origem_estado}
-                onChange={(e) => update("origem_estado", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
-              >
-                <option value="">Estado (UF)</option>
-                {ESTADOS.map((uf) => (
-                  <option key={`o-uf-${uf}`} value={uf}>
-                    {uf}
-                  </option>
-                ))}
-              </select>
+              {/* Endereço completo */}
+              <input
+                type="text"
+                value={form.origem_endereco}
+                onChange={(e) => update("origem_endereco", e.target.value)}
+                placeholder="Rua, número, bairro, CEP"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+              />
             </div>
           </div>
 
-          {/* Destino */}
+          {/* ══════ DESTINO ══════ */}
           <div>
             <label className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-[10px] font-bold text-red-700">
-                B
-              </span>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-[10px] font-bold text-red-700">B</span>
               Destino
             </label>
             <div className="space-y-3">
-              <select
-                value={form.destino_cidade}
-                onChange={(e) => update("destino_cidade", e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
-              >
-                <option value="">Selecione a cidade...</option>
-                {CIDADES.map((c) => (
-                  <option key={`d-${c.nome}-${c.estado}`} value={c.nome}>
-                    {c.nome}
-                  </option>
-                ))}
-              </select>
+              {/* Estado */}
               <select
                 value={form.destino_estado}
-                onChange={(e) => update("destino_estado", e.target.value)}
+                onChange={(e) => {
+                  update("destino_estado", e.target.value);
+                  update("destino_cidade", "");
+                }}
                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
               >
                 <option value="">Estado (UF)</option>
-                {ESTADOS.map((uf) => (
-                  <option key={`d-uf-${uf}`} value={uf}>
-                    {uf}
+                {ESTADOS_BR.map((e) => (
+                  <option key={`de-${e.sigla}`} value={e.sigla}>
+                    {e.sigla} — {e.nome}
                   </option>
                 ))}
               </select>
+              {/* Cidade (dependente do estado) */}
+              <select
+                value={form.destino_cidade}
+                onChange={(e) => update("destino_cidade", e.target.value)}
+                disabled={!form.destino_estado}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">{form.destino_estado ? "Selecione a cidade..." : "Primeiro escolha o estado"}</option>
+                {cidadesDestino.map((cid) => (
+                  <option key={`dc-${cid}`} value={cid}>
+                    {cid}
+                  </option>
+                ))}
+              </select>
+              {/* Endereço completo */}
+              <input
+                type="text"
+                value={form.destino_endereco}
+                onChange={(e) => update("destino_endereco", e.target.value)}
+                placeholder="Rua, número, bairro, CEP"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+              />
             </div>
           </div>
         </div>
 
-        {/* Visual route card */}
-        {bothSelected && !sameLocation && (
+        {/* Distância calculada */}
+        {form.distancia_km > 0 && (
           <div className="mt-6 overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
-            <div className="flex items-center justify-between">
-              {/* Origin pill */}
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">
-                  A
-                </span>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
-                    Origem
-                  </p>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {origemLabel}
-                  </p>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700">A</span>
+                <div className="text-sm">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400">Origem</p>
+                  <p className="font-semibold text-gray-900">{form.origem_cidade}, {form.origem_estado}</p>
                 </div>
               </div>
 
-              {/* Animated route line */}
-              <div className="relative mx-4 flex flex-1 items-center px-4">
-                <div className="h-0.5 w-full bg-blue-200">
-                  <div className="h-full w-full animate-pulse bg-blue-400" />
-                </div>
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                  <IconTruck className="h-5 w-5 text-blue-500" />
-                </div>
+              <div className="flex flex-col items-center gap-1">
+                <IconTruck className="h-5 w-5 text-blue-500" />
+                <span className="text-xs font-bold text-blue-600 whitespace-nowrap">
+                  {formatDistancia(form.distancia_km)}
+                </span>
               </div>
 
-              {/* Destination pill */}
               <div className="flex items-center gap-3">
-                <div>
-                  <p className="text-right text-xs font-medium uppercase tracking-wider text-gray-400">
-                    Destino
-                  </p>
-                  <p className="text-right text-sm font-semibold text-gray-900">
-                    {destinoLabel}
-                  </p>
+                <div className="text-sm text-right">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400">Destino</p>
+                  <p className="font-semibold text-gray-900">{form.destino_cidade}, {form.destino_estado}</p>
                 </div>
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700">
-                  B
-                </span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700">B</span>
               </div>
             </div>
+            {form.preco_sugerido > 0 && (
+              <div className="mt-3 border-t border-blue-200/50 pt-3 text-center">
+                <p className="text-xs text-gray-500">Preço sugerido</p>
+                <p className="text-lg font-bold text-green-600">{formatPreco(form.preco_sugerido)}</p>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Same location warning */}
         {sameLocation && (
           <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            <p className="font-medium">
-              ⚠️ Origem e destino não podem ser iguais.
-            </p>
-            <p className="mt-1 text-amber-600">
-              Selecione cidades diferentes para continuar.
-            </p>
+            <p className="font-medium">⚠️ Origem e destino não podem ser iguais.</p>
+            <p className="mt-1 text-amber-600">Selecione cidades diferentes para continuar.</p>
           </div>
         )}
       </div>
@@ -825,12 +929,36 @@ export function Cotar() {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
-              Datas e Requisitos
+              Datas e Preço
             </h2>
             <p className="text-sm text-gray-500">
-              Defina o prazo e necessidades especiais
+              Defina o prazo, preço e requisitos especiais
             </p>
           </div>
+        </div>
+
+        {/* Preço sugerido */}
+        <div className="mb-6">
+          <label className="mb-2 block text-sm font-semibold text-gray-700">
+            Preço Sugerido (R$)
+          </label>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">R$</span>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={form.preco_sugerido || ""}
+              onChange={(e) => update("preco_sugerido", Number(e.target.value))}
+              placeholder="0,00"
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 pl-10 text-sm text-gray-900 placeholder:text-gray-400 transition-colors focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+            />
+          </div>
+          {form.preco_sugerido > 0 && form.distancia_km > 0 && (
+            <p className="mt-1.5 text-xs text-gray-500">
+              {formatDistancia(form.distancia_km)} × {form.peso_kg.toLocaleString("pt-BR")} kg — {formatPreco(form.preco_sugerido)}
+            </p>
+          )}
         </div>
 
         {/* Dates */}

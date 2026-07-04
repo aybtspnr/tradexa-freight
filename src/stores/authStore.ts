@@ -54,9 +54,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signUp: async (email, password, name, role) => {
+    // Pass role and name as user_metadata so the DB trigger can read them
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          name,
+          role,
+        },
+      },
     });
 
     if (error) {
@@ -65,9 +72,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const user = data.user;
 
-    // If user was created, update the profile with name and role
+    // If user was created, ensure the profile has the correct name and role
     if (user) {
-      // Update the profile that was created by the DB trigger
+      // The DB trigger now picks up role from raw_user_meta_data automatically,
+      // but we also upsert as a safety net in case the trigger fires before metadata is available
       const { error: profileError } = await supabase
         .from("profiles")
         .upsert(
